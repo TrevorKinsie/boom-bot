@@ -5,7 +5,7 @@ import json  # Import json for file handling
 from pathlib import Path  # Import Path for easier file path handling
 from dotenv import load_dotenv  # Import load_dotenv
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters  # Add MessageHandler and filters
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -147,7 +147,8 @@ SASSY_REPLIES_WHAT = [
 
 # --- Persistent Question Answers ---
 ANSWERS_FILE = Path("question_answers.json")
-question_answers = {}
+# Store only the count now {normalized_question: count}
+question_answers: dict[str, int] = {}
 
 
 def load_answers():
@@ -156,10 +157,13 @@ def load_answers():
     if ANSWERS_FILE.exists():
         try:
             with open(ANSWERS_FILE, 'r', encoding='utf-8') as f:
-                question_answers = json.load(f)
-        except (json.JSONDecodeError, IOError) as e:
-            logger.error(f"Error loading answers file: {e}")
-            question_answers = {}  # Reset if file is corrupt
+                # Ensure loaded values are integers
+                loaded_data = json.load(f)
+                # Filter out potential non-string keys or non-int values if file was manually edited
+                question_answers = {str(k): int(v) for k, v in loaded_data.items() if isinstance(k, str) and isinstance(v, (int, float))}
+        except (json.JSONDecodeError, IOError, ValueError, TypeError) as e:
+            logger.error(f"Error loading or parsing answers file: {e}")
+            question_answers = {} # Reset if file is corrupt or invalid format
     else:
         question_answers = {}
 
@@ -176,15 +180,17 @@ def save_answers():
 
 def normalize_question(text: str) -> str:
     """Normalizes question text for consistent lookups."""
-    # Remove /boom command, lowercase, strip whitespace
-    return text.replace("/boom", "").lower().strip()
+    # Just lowercase and strip whitespace
+    return text.lower().strip()
 
 
 # Load answers when the script starts
 load_answers()
 
 
-# Define the command handler for /boom
+# --- Command Handlers ---
+
+# Define the command handler for /boom (remains unchanged)
 async def boom_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Reacts with 💥 if replying, answers questions (persistently), or sends booms/sassy replies."""
     global question_answers  # Ensure we're using the global dict
@@ -216,55 +222,87 @@ async def boom_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(booms)
 
 
-async def booms_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    global question_answers  # Ensure we're using the global dict
+# --- Helper Function for /howmanybooms Logic ---
+async def _process_howmanybooms(update: Update, question_content: str) -> None:
+    """Processes the extracted question, finds/generates booms, and replies."""
+    global question_answers
+    normalized_q = normalize_question(question_content)
 
-    message_text = update.message.text
-    if context.args:
-        normalized_q = normalize_question(message_text)
-
+    if normalized_q:  # Ensure normalized question is not empty
         if normalized_q in question_answers:
-            # Question already answered, retrieve the stored reply
-            previous_answered_reply = random.choice(PREVIOUSLY_ANSWERED_QUESTION_REPLY_VARIATIONS)
-            reply_text = previous_answered_reply.format(count=question_answers[normalized_q][0])
-            logger.info(f"Found existing answer for question: {normalized_q}")
+            # Question already answered
+            count = question_answers[normalized_q]
+            reply_format = random.choice(PREVIOUSLY_ANSWERED_QUESTION_REPLY_VARIATIONS)
+            reply_text = reply_format.format(count=count)
+            logger.info(f"Found existing answer for question '{normalized_q}': {count} booms")
         else:
-            # New question, generate and store answer
-            logger.info(f"New question detected: {normalized_q}")
+            # New question
+            logger.info(f"New question detected: '{normalized_q}'")
             question_boom_count = random.randint(1, 5)
             reply_format = random.choice(QUESTION_REPLY_VARIATIONS)
             reply_text = reply_format.format(count=question_boom_count)
-            previous_answered_reply = random.choice(PREVIOUSLY_ANSWERED_QUESTION_REPLY_VARIATIONS)
-            new_reply_text = previous_answered_reply.format(count=question_boom_count)
-            # Store the count and the full reply text
-            question_answers[normalized_q] = (question_boom_count, new_reply_text)
-            save_answers()  # Save the updated dictionary to file
+            question_answers[normalized_q] = question_boom_count
+            save_answers()  # Save the updated dictionary
 
         await update.message.reply_text(reply_text)
-        return  # Stop processing, question was handled
+    else:
+        # Normalized question became empty (e.g., only whitespace after command)
+        reply = random.choice(SASSY_REPLIES_WHAT)
+        await update.message.reply_text(reply)
 
-    reply = random.choice(SASSY_REPLIES_WHAT)
-    await update.message.reply_text(reply)
-    return
+
+# --- Specific Handlers for /howmanybooms ---
+
+async def booms_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handles the /howmanybooms command (text-based)."""
+    if context.args:
+        question_content = " ".join(context.args)
+        logger.info(f"Processing question from text args: '{question_content}'")
+        await _process_howmanybooms(update, question_content)
+    else:
+        # No arguments provided with the text command
+        reply = random.choice(SASSY_REPLIES_WHAT)
+        await update.message.reply_text(reply)
 
 
+async def handle_photo_caption(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handles photo messages with captions containing /howmanybooms."""
+    # Filters ensure message and caption exist
+    caption = update.message.caption
+    command_name = "/howmanybooms"
+    # Find command case-insensitively
+    command_pos = caption.lower().find(command_name)
+
+    if command_pos != -1:
+        # Extract text after the command
+        question_content = caption[command_pos + len(command_name):].strip()
+        logger.info(f"Processing question from photo caption: '{question_content}'")
+
+        if question_content:
+             await _process_howmanybooms(update, question_content)
+        else:
+            # Command was in caption, but no text followed it
+            reply = random.choice(SASSY_REPLIES_WHAT)
+            await update.message.reply_text(reply)
+    # else: command not found in caption, do nothing for this handler
+
+
+# --- Main Bot Function ---
 def main() -> None:
     """Start the bot."""
-    # Get the bot token from environment variable (loaded from .env)
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
         logger.error("TELEGRAM_BOT_TOKEN environment variable not set.")
         return
 
-    # Create the Application and pass it your bot's token.
     application = Application.builder().token(token).build()
 
-    # on different commands - answer in Telegram
+    # Register handlers
     application.add_handler(CommandHandler("boom", boom_command))
-
     application.add_handler(CommandHandler("howmanybooms", booms_command))
+    # Add the new handler for photo captions
+    application.add_handler(MessageHandler(filters.PHOTO & filters.CAPTION, handle_photo_caption))
 
-    # Run the bot until the user presses Ctrl-C
     logger.info("Starting bot...")
     application.run_polling()
 
