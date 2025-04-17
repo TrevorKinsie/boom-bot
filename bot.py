@@ -1,6 +1,8 @@
 import logging
 import os
 import random
+import json  # Import json for file handling
+from pathlib import Path  # Import Path for easier file path handling
 from dotenv import load_dotenv  # Import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -117,6 +119,18 @@ QUESTION_REPLY_VARIATIONS = [
     "Without a doubt, {count} BOOMS 💥",
 ]
 
+# Reply variations for questions
+PREVIOUSLY_ANSWERED_QUESTION_REPLY_VARIATIONS = [
+    "I already told you - that's {count} BOOMS 💥",
+    "We've been through this - {count} BOOMS 💥",
+    "As I said before, {count} BOOMS 💥",
+    "Still {count} BOOMS 💥, just like last time",
+    "My answer hasn't changed: {count} BOOMS 💥",
+    "Did you forget? It's {count} BOOMS 💥",
+    "Pay attention! I said {count} BOOMS 💥",
+    "Let me repeat: {count} BOOMS 💥"
+]
+
 SASSY_REPLIES_WHAT = [
     "How many uhhhh?",
     "How many booms does what?",
@@ -131,14 +145,54 @@ SASSY_REPLIES_WHAT = [
     "Sorry, my crystal ball is in the shop. What needs booms?"
 ]
 
+# --- Persistent Question Answers ---
+ANSWERS_FILE = Path("question_answers.json")
+question_answers = {}
+
+
+def load_answers():
+    """Loads question answers from the JSON file."""
+    global question_answers
+    if ANSWERS_FILE.exists():
+        try:
+            with open(ANSWERS_FILE, 'r', encoding='utf-8') as f:
+                question_answers = json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            logger.error(f"Error loading answers file: {e}")
+            question_answers = {}  # Reset if file is corrupt
+    else:
+        question_answers = {}
+
+
+def save_answers():
+    """Saves the current question answers to the JSON file."""
+    global question_answers
+    try:
+        with open(ANSWERS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(question_answers, f, ensure_ascii=False, indent=4)
+    except IOError as e:
+        logger.error(f"Error saving answers file: {e}")
+
+
+def normalize_question(text: str) -> str:
+    """Normalizes question text for consistent lookups."""
+    # Remove /boom command, lowercase, strip whitespace
+    return text.replace("/boom", "").lower().strip()
+
+
+# Load answers when the script starts
+load_answers()
+
+
 # Define the command handler for /boom
 async def boom_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Reacts with 💥 if replying, answers questions, or sends booms/sassy replies."""
+    """Reacts with 💥 if replying, answers questions (persistently), or sends booms/sassy replies."""
+    global question_answers  # Ensure we're using the global dict
 
-    # 2. Logic for non-reply, non-question /boom commands ---
-    boom_count = random.randint(1, 5) # Default to random if no valid number is given
+    # --- 3. Existing logic for non-reply, non-question /boom commands ---
+    boom_count = random.randint(1, 5)  # Default to random if no valid number is given
 
-    if context.args: # Check if any arguments were passed with the command
+    if context.args:  # Check if any arguments were passed with the command
         try:
             requested_count = int(context.args[0])
             if 1 <= requested_count <= 5:
@@ -147,7 +201,7 @@ async def boom_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 reply = random.choice(SASSY_REPLIES_HIGH)
                 await update.message.reply_text(reply)
                 return
-            else: # requested_count < 1
+            else:  # requested_count < 1
                 reply = random.choice(SASSY_REPLIES_LOW)
                 await update.message.reply_text(reply)
                 return
@@ -163,18 +217,36 @@ async def boom_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 async def booms_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        # 1. Check if the message text contains /boom and ends with a question mark
+    global question_answers  # Ensure we're using the global dict
+
+    message_text = update.message.text
     if context.args:
-        question_boom_count = random.randint(1, 5)
-        # Choose a random reply format and insert the count
-        reply_format = random.choice(QUESTION_REPLY_VARIATIONS)
-        reply_text = reply_format.format(count=question_boom_count)
+        normalized_q = normalize_question(message_text)
+
+        if normalized_q in question_answers:
+            # Question already answered, retrieve the stored reply
+            previous_answered_reply = random.choice(PREVIOUSLY_ANSWERED_QUESTION_REPLY_VARIATIONS)
+            reply_text = previous_answered_reply.format(count=question_answers[normalized_q][0])
+            logger.info(f"Found existing answer for question: {normalized_q}")
+        else:
+            # New question, generate and store answer
+            logger.info(f"New question detected: {normalized_q}")
+            question_boom_count = random.randint(1, 5)
+            reply_format = random.choice(QUESTION_REPLY_VARIATIONS)
+            reply_text = reply_format.format(count=question_boom_count)
+            previous_answered_reply = random.choice(PREVIOUSLY_ANSWERED_QUESTION_REPLY_VARIATIONS)
+            new_reply_text = previous_answered_reply.format(count=question_boom_count)
+            # Store the count and the full reply text
+            question_answers[normalized_q] = (question_boom_count, new_reply_text)
+            save_answers()  # Save the updated dictionary to file
+
         await update.message.reply_text(reply_text)
-        return # Stop processing, question was handled
-    
+        return  # Stop processing, question was handled
+
     reply = random.choice(SASSY_REPLIES_WHAT)
     await update.message.reply_text(reply)
     return
+
 
 def main() -> None:
     """Start the bot."""
@@ -192,10 +264,10 @@ def main() -> None:
 
     application.add_handler(CommandHandler("howmanybooms", booms_command))
 
-
     # Run the bot until the user presses Ctrl-C
     logger.info("Starting bot...")
     application.run_polling()
+
 
 if __name__ == "__main__":
     main()
