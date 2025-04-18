@@ -20,6 +20,9 @@ import data_manager
 # Import NLTK utility functions
 from nltk_utils import normalize_question_nltk, normalize_question_simple, extract_subject
 
+# Import Craps game logic
+from craps_game import play_craps
+
 logger = logging.getLogger(__name__)
 p = engine() # Initialize inflect engine
 
@@ -178,4 +181,10 @@ async def handle_photo_caption(update: Update, context: ContextTypes.DEFAULT_TYP
             # Command was in caption, but no text followed it
             reply = random.choice(SASSY_REPLIES_WHAT)
             await update.message.reply_text(reply)
-    # else: command not found in caption, do nothing for this handler
+
+
+async def craps_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handles the /craps command, playing a round of Craps."""
+    # context.user_data is a dict unique to each user, used to store game state
+    result = play_craps(context.user_data)
+    await update.message.reply_text(result)

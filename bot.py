@@ -6,7 +6,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters
 # Import setup functions and handlers
 from nltk_utils import setup_nltk
 from data_manager import load_answers
-from handlers import boom_command, booms_command, handle_photo_caption
+from handlers import boom_command, booms_command, handle_photo_caption, craps_command  # Added craps_command
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -34,6 +34,7 @@ def main() -> None:
     application.add_handler(CommandHandler("boom", boom_command))
     application.add_handler(CommandHandler("howmanybooms", booms_command))
     application.add_handler(MessageHandler(filters.PHOTO & filters.CAPTION, handle_photo_caption))
+    application.add_handler(CommandHandler("passline", craps_command))  # Added craps handler
 
     logger.info("Starting bot...")
     application.run_polling()
