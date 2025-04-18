@@ -61,38 +61,42 @@ async def _process_howmanybooms(update: Update, question_content: str) -> None:
     incoming_words = normalize_question_nltk(question_content)
     logger.info(f"Normalized incoming question '{question_content}' to words: {incoming_words}")
 
-    if not incoming_words:
-        logger.warning(f"Question '{question_content}' resulted in no significant words after normalization.")
-        reply = random.choice(SASSY_REPLIES_WHAT)
-        await update.message.reply_text(reply)
-        return
-
     match_found = False
     matched_question_key = None
     highest_similarity = 0.0
     similarity_threshold = 0.7  # Adjust this threshold (0.0 to 1.0) as needed
 
-    # Compare against stored questions
-    for stored_key, stored_count in question_answers.items():
-        stored_words = normalize_question_nltk(stored_key)
-        if not stored_words:
-            continue  # Skip empty stored questions
+    # Only attempt matching if normalization yielded significant words
+    if incoming_words:
+        # Compare against stored questions
+        for stored_key, stored_count in question_answers.items():
+            stored_words = normalize_question_nltk(stored_key)
+            if not stored_words:
+                continue  # Skip empty stored questions
 
-        # Calculate Jaccard similarity
-        intersection = len(incoming_words.intersection(stored_words))
-        union = len(incoming_words.union(stored_words))
-        similarity = intersection / union if union > 0 else 0
+            # Calculate Jaccard similarity
+            intersection = len(incoming_words.intersection(stored_words))
+            union = len(incoming_words.union(stored_words))
+            similarity = intersection / union if union > 0 else 0
 
-        logger.debug(f"Comparing incoming {incoming_words} with stored '{stored_key}' ({stored_words}). Similarity: {similarity:.2f}")
+            logger.debug(f"Comparing incoming {incoming_words} with stored '{stored_key}' ({stored_words}). Similarity: {similarity:.2f}")
 
-        # Check if this is the best match so far above the threshold
-        if similarity >= similarity_threshold and similarity > highest_similarity:
-            highest_similarity = similarity
-            matched_question_key = stored_key
-            match_found = True
+            # Check if this is the best match so far above the threshold
+            if similarity >= similarity_threshold and similarity > highest_similarity:
+                highest_similarity = similarity
+                matched_question_key = stored_key
+                match_found = True
+    elif not question_content.strip(): # Normalization empty AND original input was empty/whitespace
+        logger.warning(f"Question content was empty or whitespace.")
+        reply = random.choice(SASSY_REPLIES_WHAT)
+        await update.message.reply_text(reply)
+        return
+    # If incoming_words is empty but question_content was not, proceed to treat as new below
 
     # Extract subject *after* finding potential match or deciding it's new
-    extracted_subject = extract_subject(question_content)
+    # Use original content for subject extraction if normalization failed but input existed
+    subject_base = question_content if not incoming_words else question_content # Or adjust logic as needed
+    extracted_subject = extract_subject(subject_base)
 
     reply_text = "" # Initialize reply_text
     subject_to_use = extracted_subject # Default to non-capitalized
@@ -111,17 +115,21 @@ async def _process_howmanybooms(update: Update, question_content: str) -> None:
         reply_text = reply_format.format(count_str=count_str, subject=subject_to_use)
         logger.info(f"Found similar question '{matched_question_key}' (Similarity: {highest_similarity:.2f}) for '{question_content}'. Answer: {count} booms")
 
-    else:
+    else: # No similar question found OR normalization yielded nothing but input was present
         # No similar question found, treat as new
         storage_key = normalize_question_simple(question_content)
 
-        if not storage_key:
+        if not storage_key: # This check might be redundant now but kept for safety
             logger.warning(f"Original question '{question_content}' also resulted in empty simple normalized key.")
             reply = random.choice(SASSY_REPLIES_WHAT)
             await update.message.reply_text(reply)
             return
 
-        logger.info(f"No similar question found for '{question_content}'. Treating as new question with key '{storage_key}'.")
+        if not incoming_words:
+             logger.info(f"No significant words after NLTK normalization for '{question_content}', but treating as new question with key '{storage_key}'.")
+        else:
+             logger.info(f"No similar question found for '{question_content}'. Treating as new question with key '{storage_key}'.")
+
         question_boom_count = random.randint(1, 5)
         count_str = p.no("BOOM", question_boom_count)
         reply_format = random.choice(QUESTION_REPLY_VARIATIONS)
