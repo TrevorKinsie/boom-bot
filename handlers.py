@@ -20,8 +20,8 @@ import data_manager
 # Import NLTK utility functions
 from nltk_utils import normalize_question_nltk, normalize_question_simple, extract_subject
 
-# Import Craps game logic
-from craps_game import play_craps
+# Import Craps game logic and constants
+from craps_game import play_craps, COME_OUT_PHASE, POINT_PHASE
 
 logger = logging.getLogger(__name__)
 p = engine() # Initialize inflect engine
@@ -184,7 +184,61 @@ async def handle_photo_caption(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def craps_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles the /craps command, playing a round of Craps."""
+    """Handles the /roll command (renamed implicitly) for playing a Craps round."""
+    # Initialize balance if it doesn't exist
+    if 'balance' not in context.user_data:
+        context.user_data['balance'] = 100 # Starting balance
+        await update.message.reply_text("Welcome to Craps! You start with $100. Use /passline <amount> to place your bet.")
+        return # Don't roll yet, wait for bet
+
+    # Check if a bet has been placed for the current round
+    if context.user_data.get('craps_state', COME_OUT_PHASE) == COME_OUT_PHASE and context.user_data.get('craps_bet', 0) <= 0:
+         await update.message.reply_text("You need to place a bet first! Use /passline <amount>")
+         return
+
     # context.user_data is a dict unique to each user, used to store game state
     result = play_craps(context.user_data)
     await update.message.reply_text(result)
+
+async def passline_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handles the /passline command to place a bet for Craps."""
+    # Initialize balance if it doesn't exist
+    if 'balance' not in context.user_data:
+        context.user_data['balance'] = 100 # Starting balance
+
+    balance = context.user_data['balance']
+    game_state = context.user_data.get('craps_state', COME_OUT_PHASE)
+
+    # Prevent betting mid-roll (during POINT_PHASE)
+    if game_state == POINT_PHASE:
+        point = context.user_data.get('craps_point')
+        await update.message.reply_text(f"You can't place a new bet now. The point is {point}. Use /roll.")
+        return
+
+    # --- Bet Amount Parsing and Validation ---
+    try:
+        if not context.args:
+            await update.message.reply_text("Please specify an amount to bet. Usage: /passline <amount>")
+            return
+
+        bet_amount = int(context.args[0])
+
+        if bet_amount <= 0:
+            await update.message.reply_text("Bet amount must be positive.")
+            return
+
+        if bet_amount > balance:
+            await update.message.reply_text(f"Insufficient funds. Your balance is ${balance}.")
+            return
+
+    except (ValueError, IndexError):
+        await update.message.reply_text("Invalid bet amount. Please enter a number. Usage: /passline <amount>")
+        return
+
+    # --- Place the Bet --- 
+    context.user_data['balance'] = balance - bet_amount
+    context.user_data['craps_bet'] = bet_amount
+    context.user_data['craps_state'] = COME_OUT_PHASE # Ensure starting state
+    context.user_data.pop('craps_point', None) # Clear previous point if any
+
+    await update.message.reply_text(f"Pass Line bet of ${bet_amount} placed! Your new balance: ${context.user_data['balance']}. Roll the dice! /roll") # Changed /craps to /roll
