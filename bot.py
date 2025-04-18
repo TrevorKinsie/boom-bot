@@ -2,10 +2,15 @@ import logging
 import os
 import random
 import json  # Import json for file handling
+import string
+import nltk
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
 from pathlib import Path  # Import Path for easier file path handling
 from dotenv import load_dotenv  # Import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters  # Add MessageHandler and filters
+from inflect import engine  # Import the inflect library
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -14,6 +19,31 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+# --- Download NLTK data (if not already present) ---
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:  # Corrected exception type
+    logger.info("Downloading NLTK stopwords...")
+    nltk.download('stopwords', quiet=True)
+    logger.info("NLTK stopwords downloaded.")
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:  # Corrected exception type
+    logger.info("Downloading NLTK punkt tokenizer...")
+    nltk.download('punkt', quiet=True)
+    logger.info("NLTK punkt tokenizer downloaded.")
+try:
+    # Check for the POS tagger model
+    nltk.data.find('taggers/averaged_perceptron_tagger')
+except LookupError:
+    logger.info("Downloading NLTK averaged_perceptron_tagger...")
+    nltk.download('averaged_perceptron_tagger', quiet=True)
+    logger.info("NLTK averaged_perceptron_tagger downloaded.")
+
+# --- Setup NLTK resources ---
+stop_words = set(stopwords.words('english'))
+p = engine()  # Initialize inflect engine
 
 # Sassy replies for numbers > 5
 SASSY_REPLIES_HIGH = [
@@ -107,28 +137,28 @@ SASSY_REPLIES_INVALID = [
     "Even a random number generator would do better than that."
 ]
 
-# Reply variations for questions
+# Reply variations for questions - Removed BOOMS from here
 QUESTION_REPLY_VARIATIONS = [
-    "I give that {count} BOOMS 💥",
-    "That definitely deserves {count} BOOMS 💥",
-    "My official rating: {count} BOOMS 💥",
-    "Let's go with {count} BOOMS 💥 for that one.",
-    "Hmm, I'd say {count} BOOMS 💥",
-    "Solid {count} BOOMS 💥 from me.",
-    "The boom-o-meter says: {count} BOOMS 💥",
-    "Without a doubt, {count} BOOMS 💥",
+    "I give {subject} {count_str} 💥",
+    "{subject} definitely deserves {count_str} 💥",
+    "My official rating for {subject}: {count_str} 💥",
+    "Let's go with {count_str} 💥 for {subject}.",
+    "Hmm, I'd say {subject} gets {count_str} 💥",
+    "Solid {count_str} 💥 for {subject} from me.",
+    "The boom-o-meter says: {count_str} 💥 for {subject}",
+    "Without a doubt, {subject} gets {count_str} 💥",
 ]
 
-# Reply variations for questions
+# Reply variations for previously answered questions - Removed BOOMS from here
 PREVIOUSLY_ANSWERED_QUESTION_REPLY_VARIATIONS = [
-    "I already told you - that's {count} BOOMS 💥",
-    "We've been through this - {count} BOOMS 💥",
-    "As I said before, {count} BOOMS 💥",
-    "Still {count} BOOMS 💥, just like last time",
-    "My answer hasn't changed: {count} BOOMS 💥",
-    "Did you forget? It's {count} BOOMS 💥",
-    "Pay attention! I said {count} BOOMS 💥",
-    "Let me repeat: {count} BOOMS 💥"
+    "I already told you - {subject} gets {count_str} 💥",
+    "We've been through this - {subject} is {count_str} 💥",
+    "As I said before, {subject} deserves {count_str} 💥",
+    "Still {count_str} 💥 for {subject}, just like last time",
+    "My answer for {subject} hasn't changed: {count_str} 💥",
+    "Did you forget? {subject} is {count_str} 💥",
+    "Pay attention! I said {subject} gets {count_str} 💥",
+    "Let me repeat: {subject} deserves {count_str} 💥"
 ]
 
 SASSY_REPLIES_WHAT = [
@@ -178,10 +208,92 @@ def save_answers():
         logger.error(f"Error saving answers file: {e}")
 
 
-def normalize_question(text: str) -> str:
-    """Normalizes question text for consistent lookups."""
-    # Just lowercase and strip whitespace
+def normalize_question_simple(text: str) -> str:
+    """Original simple normalization for storage keys."""
     return text.lower().strip()
+
+
+def normalize_question_nltk(text: str) -> set[str]:
+    """Normalizes question text using NLTK for similarity comparison.
+    Removes punctuation/stopwords, returns set of significant words.
+    """
+    if not text:  # Handle empty input early
+        return set()
+    try:
+        text = text.lower()
+        # Remove punctuation
+        text = text.translate(str.maketrans('', '', string.punctuation))
+        # Tokenize
+        try:
+            tokens = word_tokenize(text)
+        except LookupError as e:
+            logger.error(f"NLTK LookupError during tokenization: {e}. Falling back to simple split.")
+            # Fallback: simple whitespace split if punkt fails
+            tokens = text.split()
+
+        # Remove stop words and non-alphabetic tokens
+        significant_words = {word for word in tokens if word.isalpha() and word not in stop_words}
+        return significant_words
+    except Exception as e:
+        # Catch other potential errors during normalization
+        logger.error(f"Unexpected error during NLTK normalization of '{text}': {e}")
+        return set()
+
+
+def extract_subject(text: str) -> str:
+    """Extracts the likely subject (first noun phrase) from the question text using POS tagging."""
+    try:
+        # Tokenize the text
+        tokens = word_tokenize(text)
+        # Perform Part-of-Speech tagging
+        tagged_tokens = nltk.pos_tag(tokens)
+
+        subject_words = []
+        in_subject = False
+        # Simple heuristic: find the first sequence of Determiner (DT), Adjective (JJ), Noun (NN/NNS/NNP/NNPS)
+        for word, tag in tagged_tokens:
+            # Start capturing if we see a determiner, adjective, or noun
+            if tag.startswith('DT') or tag.startswith('JJ') or tag.startswith('NN'):
+                subject_words.append(word)
+                in_subject = True
+            # Stop capturing if we are in a subject and hit something else (like a verb VB)
+            elif in_subject and (tag.startswith('VB') or word in ['is', 'are', 'does', 'do', 'get', 'deserves']):
+                break  # Stop after the main noun phrase, before the verb
+            # If we started capturing but hit something non-essential, keep going for multi-word nouns
+            elif in_subject and not (tag.startswith('DT') or tag.startswith('JJ') or tag.startswith('NN')):
+                # If it's something clearly not part of the noun phrase, stop
+                if word in ['?', '.'] or tag in [':', ',']:
+                    break
+                # Otherwise, might be part of a complex noun phrase, continue for now
+                # (This part is tricky and can be refined)
+                pass
+            # If we haven't started capturing and it's not a starting tag, ignore
+            elif not in_subject:
+                continue
+
+        # Clean up the extracted subject
+        subject = " ".join(subject_words).strip()
+        # Remove leading 'how many booms does/do/is/are' etc. if accidentally captured
+        common_prefixes = ["how many booms does ", "how many booms do ", "how many booms is ", "how many booms are ", "how many booms "]
+        for prefix in common_prefixes:
+            if subject.lower().startswith(prefix):
+                subject = subject[len(prefix):].strip()
+                break
+
+        # Fallback if extraction is empty or very short
+        if not subject or len(subject.split()) == 0:
+            logger.warning(f"Subject extraction failed for '{text}'. Falling back to full text.")
+            return text.strip().rstrip('?')  # Fallback to original cleaned text
+
+        logger.info(f"Extracted subject '{subject}' from '{text}'")
+        return subject
+
+    except LookupError as e:
+        logger.error(f"NLTK LookupError during subject extraction (likely missing tagger): {e}. Falling back.")
+        return text.strip().rstrip('?')  # Fallback
+    except Exception as e:
+        logger.error(f"Error during subject extraction for '{text}': {e}")
+        return text.strip().rstrip('?')  # Fallback
 
 
 # Load answers when the script starts
@@ -224,31 +336,91 @@ async def boom_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 # --- Helper Function for /howmanybooms Logic ---
 async def _process_howmanybooms(update: Update, question_content: str) -> None:
-    """Processes the extracted question, finds/generates booms, and replies."""
+    """Processes the extracted question, finds/generates booms, and replies.
+       Uses NLTK for fuzzy matching and subject extraction. Handles pluralization and capitalization.
+    """
     global question_answers
-    normalized_q = normalize_question(question_content)
+    incoming_words = normalize_question_nltk(question_content)
+    logger.info(f"Normalized incoming question '{question_content}' to words: {incoming_words}")
 
-    if normalized_q:  # Ensure normalized question is not empty
-        if normalized_q in question_answers:
-            # Question already answered
-            count = question_answers[normalized_q]
-            reply_format = random.choice(PREVIOUSLY_ANSWERED_QUESTION_REPLY_VARIATIONS)
-            reply_text = reply_format.format(count=count)
-            logger.info(f"Found existing answer for question '{normalized_q}': {count} booms")
-        else:
-            # New question
-            logger.info(f"New question detected: '{normalized_q}'")
-            question_boom_count = random.randint(1, 5)
-            reply_format = random.choice(QUESTION_REPLY_VARIATIONS)
-            reply_text = reply_format.format(count=question_boom_count)
-            question_answers[normalized_q] = question_boom_count
-            save_answers()  # Save the updated dictionary
-
-        await update.message.reply_text(reply_text)
-    else:
-        # Normalized question became empty (e.g., only whitespace after command)
+    if not incoming_words:
+        logger.warning(f"Question '{question_content}' resulted in no significant words after normalization.")
         reply = random.choice(SASSY_REPLIES_WHAT)
         await update.message.reply_text(reply)
+        return
+
+    match_found = False
+    matched_question_key = None
+    highest_similarity = 0.0
+    similarity_threshold = 0.7  # Adjust this threshold (0.0 to 1.0) as needed
+
+    # Compare against stored questions
+    for stored_key, stored_count in question_answers.items():
+        stored_words = normalize_question_nltk(stored_key)
+        if not stored_words:
+            continue  # Skip empty stored questions
+
+        # Calculate Jaccard similarity
+        intersection = len(incoming_words.intersection(stored_words))
+        union = len(incoming_words.union(stored_words))
+        similarity = intersection / union if union > 0 else 0
+
+        logger.debug(f"Comparing incoming {incoming_words} with stored '{stored_key}' ({stored_words}). Similarity: {similarity:.2f}")
+
+        # Check if this is the best match so far above the threshold
+        if similarity >= similarity_threshold and similarity > highest_similarity:
+            highest_similarity = similarity
+            matched_question_key = stored_key
+            match_found = True
+
+    # Extract subject *after* finding potential match or deciding it's new
+    extracted_subject = extract_subject(question_content)
+    # DO NOT capitalize here unconditionally
+    # capitalized_subject = extracted_subject.capitalize()
+
+    reply_text = "" # Initialize reply_text
+    subject_to_use = extracted_subject # Default to non-capitalized
+
+    if match_found and matched_question_key:
+        # Found a sufficiently similar question
+        count = question_answers[matched_question_key]
+        count_str = p.no("BOOM", count)
+        reply_format = random.choice(PREVIOUSLY_ANSWERED_QUESTION_REPLY_VARIATIONS)
+
+        # Capitalize subject only if the chosen reply format starts with it
+        if reply_format.startswith("{subject}"):
+            subject_to_use = extracted_subject.capitalize()
+
+        # Use the potentially capitalized subject and pluralized count string for the reply
+        reply_text = reply_format.format(count_str=count_str, subject=subject_to_use)
+        logger.info(f"Found similar question '{matched_question_key}' (Similarity: {highest_similarity:.2f}) for '{question_content}'. Answer: {count} booms")
+
+    else:
+        # No similar question found, treat as new
+        storage_key = normalize_question_simple(question_content)
+
+        if not storage_key:
+            logger.warning(f"Original question '{question_content}' also resulted in empty simple normalized key.")
+            reply = random.choice(SASSY_REPLIES_WHAT)
+            await update.message.reply_text(reply)
+            return
+
+        logger.info(f"No similar question found for '{question_content}'. Treating as new question with key '{storage_key}'.")
+        question_boom_count = random.randint(1, 5)
+        count_str = p.no("BOOM", question_boom_count)
+        reply_format = random.choice(QUESTION_REPLY_VARIATIONS)
+
+        # Capitalize subject only if the chosen reply format starts with it
+        if reply_format.startswith("{subject}"):
+            subject_to_use = extracted_subject.capitalize()
+
+        # Use the potentially capitalized subject and pluralized count string for the reply
+        reply_text = reply_format.format(count_str=count_str, subject=subject_to_use)
+        question_answers[storage_key] = question_boom_count  # Store using the simple key
+        save_answers()
+
+    # Send the final reply
+    await update.message.reply_text(reply_text)
 
 
 # --- Specific Handlers for /howmanybooms ---
@@ -279,7 +451,7 @@ async def handle_photo_caption(update: Update, context: ContextTypes.DEFAULT_TYP
         logger.info(f"Processing question from photo caption: '{question_content}'")
 
         if question_content:
-             await _process_howmanybooms(update, question_content)
+            await _process_howmanybooms(update, question_content)
         else:
             # Command was in caption, but no text followed it
             reply = random.choice(SASSY_REPLIES_WHAT)
