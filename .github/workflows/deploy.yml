@@ -2,7 +2,7 @@ name: Fly Deploy
 
 on:
   workflow_run:
-    workflows: ["Test"] # Assumes your test workflow is named "Test"
+    workflows: ["Run Tests"]
     types:
       - completed
     branches:
