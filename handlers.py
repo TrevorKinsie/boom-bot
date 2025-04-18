@@ -2,7 +2,7 @@ import logging
 import random
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from inflect import engine
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from telegram.ext import ContextTypes, CallbackQueryHandler
 
 # Import replies
@@ -272,10 +272,149 @@ async def start_craps_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         reply_markup=keyboard
     )
 
+# --- Craps Callback Handler Helpers ---
+
+async def _handle_craps_roll(channel_id: str, user_name: str) -> tuple[str, InlineKeyboardMarkup]:
+    """Handles the logic for the ROLL callback."""
+    result = play_craps_round(channel_id, game_data_manager)
+    new_text = f"{result}\n\n---\n{user_name}, what's next?"
+    keyboard = get_craps_keyboard(channel_id)
+    return new_text, keyboard
+
+async def _handle_craps_show(channel_id: str, user_id: str, user_name: str, chat_title: str | None) -> str:
+    """Handles the logic for the SHOW callback."""
+    result = await get_showgame_text(channel_id, user_id, user_name, chat_title)
+    return f"{result}\n\n---\n{user_name}, what's next?"
+
+async def _handle_craps_reset(channel_id: str, user_id: str, user_name: str) -> str:
+    """Handles the logic for the RESET callback."""
+    result = await do_resetmygame(channel_id, user_id, user_name)
+    return f"{result}\n\n---\n{user_name}, what's next?"
+
+async def _handle_craps_help(query: CallbackQuery) -> None:
+    """Handles the logic for the HELP callback."""
+    help_text = get_craps_help_text()
+    await query.message.reply_text(help_text, parse_mode='MarkdownV2')
+
+async def _handle_craps_bet_pass(channel_id: str, user_name: str) -> tuple[str | None, InlineKeyboardMarkup | None, bool, str | None]:
+    """Handles the logic for the BET_PASS callback."""
+    channel_data = game_data_manager.get_channel_data(channel_id)
+    game_state = channel_data.get('craps_state', COME_OUT_PHASE)
+    if game_state == POINT_PHASE:
+        new_text = f"Cannot place Pass Line bet when point is established.\n\n---\n{user_name}, what's next?"
+        keyboard = get_craps_keyboard(channel_id)
+        return new_text, keyboard, False, None
+    else:
+        return None, None, True, 'pass_line'
+
+async def _handle_craps_bet_field() -> tuple[str | None, InlineKeyboardMarkup | None, bool, str | None]:
+    """Handles the logic for the BET_FIELD callback."""
+    return None, None, True, 'field'
+
+async def _handle_craps_place_bet(callback_data: str, channel_id: str, user_id: str, user_name: str) -> tuple[str, InlineKeyboardMarkup]:
+    """Handles the logic for placing a bet via amount buttons."""
+    try:
+        full_bet_part = callback_data[len(CALLBACK_PLACE_BET_PREFIX):]
+        last_underscore_index = full_bet_part.rfind('_')
+
+        if last_underscore_index == -1:
+            raise ValueError("Invalid callback format: no underscore found after prefix.")
+
+        bet_type = full_bet_part[:last_underscore_index]
+        amount_part = full_bet_part[last_underscore_index + 1:]
+
+        player_data = game_data_manager.get_player_data(channel_id, user_id)
+        balance = Decimal(player_data.get('balance', '0'))
+
+        if amount_part.lower() == 'all':
+            amount_to_bet = balance
+            amount_str_for_func = str(balance.quantize(Decimal("0.01"), ROUND_HALF_UP))
+        else:
+            amount_to_bet = Decimal(amount_part)
+            amount_str_for_func = amount_part
+
+        if amount_to_bet <= 0:
+            result_message = "Bet amount must be positive."
+        elif amount_to_bet > balance:
+            result_message = f"Insufficient balance. You have ${balance:.2f}, need ${amount_to_bet:.2f}."
+        else:
+            result_message = place_craps_bet(channel_id, user_id, user_name, bet_type, amount_str_for_func, game_data_manager)
+
+        new_text = f"{result_message}\n\n---\n{user_name}, what's next?"
+        keyboard = get_craps_keyboard(channel_id)
+
+    except (IndexError, ValueError, InvalidOperation) as e:
+        logger.error(f"Error parsing place bet callback '{callback_data}': {e}")
+        new_text = f"Error processing bet amount. Please try again.\n\n---\n{user_name}, what's next?"
+        keyboard = get_craps_keyboard(channel_id)
+
+    return new_text, keyboard
+
+async def _handle_craps_back_main(user_name: str, channel_id: str) -> tuple[str, InlineKeyboardMarkup]:
+    """Handles the logic for the BACK_TO_MAIN callback."""
+    new_text = f"{user_name}, what's next?"
+    keyboard = get_craps_keyboard(channel_id)
+    return new_text, keyboard
+
+async def _handle_craps_bet_place_prompt(user_name: str, channel_id: str) -> tuple[str, InlineKeyboardMarkup]:
+    """Handles the logic for the BET_PLACE_PROMPT callback."""
+    bet_info = (
+        "Place bets (4,5,6,8,9,10), Hard ways (4,6,8,10), and others require the `/bet` command.\n"
+        "Usage: `/bet <type> <amount>`\n"
+        "Example: `/bet place_6 12` or `/bet hard_8 5`\n"
+        "Use `/crapshelp` for more details."
+    )
+    new_text = f"{bet_info}\n\n---\n{user_name}, what's next?"
+    keyboard = get_craps_keyboard(channel_id)
+    return new_text, keyboard
+
+async def _handle_craps_show_amount_keyboard(bet_type_for_amount: str, channel_id: str, user_id: str, user_name: str) -> tuple[str, InlineKeyboardMarkup]:
+    """Handles the logic for showing the bet amount selection keyboard."""
+    player_data = game_data_manager.get_player_data(channel_id, user_id)
+    balance = Decimal(player_data.get('balance', '0'))
+    if balance <= 0:
+        new_text = f"You have no balance to bet with!\n\n---\n{user_name}, what's next?"
+        keyboard = get_craps_keyboard(channel_id)
+    else:
+        amount_keyboard = get_bet_amount_keyboard(bet_type_for_amount, balance)
+        bet_name = bet_type_for_amount.replace('_', ' ').title()
+        new_text = f"Select amount for {bet_name}: (Balance: ${balance:.2f})"
+        keyboard = amount_keyboard
+    return new_text, keyboard
+
+async def _edit_or_send_craps_message(query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE, new_text: str, keyboard: InlineKeyboardMarkup, channel_id: str) -> None:
+    """Edits the existing message or sends a new one if editing fails."""
+    if query.message:
+        try:
+            # Check if message content and keyboard are identical to avoid unnecessary API calls
+            if query.message.text == new_text and query.message.reply_markup == keyboard:
+                logger.debug("Skipping message edit: content and keyboard are identical.")
+            else:
+                await query.edit_message_text(
+                    text=new_text,
+                    reply_markup=keyboard
+                )
+        except Exception as e:
+            # Specifically check for the "Message is not modified" error
+            if "Message is not modified" not in str(e):
+                logger.error(f"Failed to edit craps message: {e}")
+                # Fallback: Try sending a new message if editing failed for other reasons
+                try:
+                    await context.bot.send_message(chat_id=channel_id, text=new_text, reply_markup=keyboard)
+                except Exception as e2:
+                    logger.error(f"Failed to send fallback craps message: {e2}")
+    else:
+        logger.warning("Cannot edit message, query.message is None.")
+        # Fallback: Try sending a new message if the original message context is lost
+        try:
+            await context.bot.send_message(chat_id=channel_id, text=new_text, reply_markup=keyboard)
+        except Exception as e2:
+            logger.error(f"Failed to send fallback craps message when query.message was None: {e2}")
+
 # --- Craps Callback Handler ---
 
 async def craps_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles button presses from the Craps inline keyboard."""
+    """Handles button presses from the Craps inline keyboard by dispatching to helpers."""
     query = update.callback_query
     if not query or not query.message or not query.from_user or not query.data:
         logger.warning("Craps callback received without query, message, user, or data.")
@@ -287,127 +426,50 @@ async def craps_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
     user_id = str(query.from_user.id)
     user_name = query.from_user.first_name or f"User_{user_id}"
     callback_data = query.data
+    chat_title = query.message.chat.title  # Get chat title
 
-    keyboard = get_craps_keyboard(channel_id)
-    new_text = f"{user_name}, what's next?"
+    # Default values
+    new_text = f"{user_name}, what's next?" # Default text
+    keyboard = get_craps_keyboard(channel_id) # Default keyboard
     edit_message = True
     show_amount_keyboard = False
     bet_type_for_amount = None
 
+    # Dispatch based on callback data
     if callback_data == CALLBACK_ROLL:
-        result = play_craps_round(channel_id, game_data_manager)
-        new_text = f"{result}\n\n---\n{user_name}, what's next?"
-        keyboard = get_craps_keyboard(channel_id)
-
+        new_text, keyboard = await _handle_craps_roll(channel_id, user_name)
     elif callback_data == CALLBACK_SHOW:
-        result = await get_showgame_text(channel_id, user_id, user_name)
-        new_text = f"{result}\n\n---\n{user_name}, what's next?"
-
+        new_text = await _handle_craps_show(channel_id, user_id, user_name, chat_title)
+        # Keyboard remains the default main keyboard
     elif callback_data == CALLBACK_RESET:
-        result = await do_resetmygame(channel_id, user_id, user_name)
-        new_text = f"{result}\n\n---\n{user_name}, what's next?"
-
+        new_text = await _handle_craps_reset(channel_id, user_id, user_name)
+        # Keyboard remains the default main keyboard
     elif callback_data == CALLBACK_HELP:
-        help_text = get_craps_help_text()
-        await query.message.reply_text(help_text, parse_mode='MarkdownV2')
-        edit_message = False
-
+        await _handle_craps_help(query)
+        edit_message = False # Help sends a new message
     elif callback_data == CALLBACK_BET_PASS:
-        channel_data = game_data_manager.get_channel_data(channel_id)
-        game_state = channel_data.get('craps_state', COME_OUT_PHASE)
-        if game_state == POINT_PHASE:
-            new_text = f"Cannot place Pass Line bet when point is established.\n\n---\n{user_name}, what's next?"
-            keyboard = get_craps_keyboard(channel_id)
-        else:
-            show_amount_keyboard = True
-            bet_type_for_amount = 'pass_line'
-
+        new_text_maybe, keyboard_maybe, show_amount_keyboard, bet_type_for_amount = await _handle_craps_bet_pass(channel_id, user_name)
+        if new_text_maybe: new_text = new_text_maybe
+        if keyboard_maybe: keyboard = keyboard_maybe
     elif callback_data == CALLBACK_BET_FIELD:
-        show_amount_keyboard = True
-        bet_type_for_amount = 'field'
-
+        _, _, show_amount_keyboard, bet_type_for_amount = await _handle_craps_bet_field()
     elif callback_data.startswith(CALLBACK_PLACE_BET_PREFIX):
-        try:
-            full_bet_part = callback_data[len(CALLBACK_PLACE_BET_PREFIX):]
-            last_underscore_index = full_bet_part.rfind('_')
-
-            if last_underscore_index == -1:
-                raise ValueError("Invalid callback format: no underscore found after prefix.")
-
-            bet_type = full_bet_part[:last_underscore_index]
-            amount_part = full_bet_part[last_underscore_index + 1:]
-
-            player_data = game_data_manager.get_player_data(channel_id, user_id)
-            balance = Decimal(player_data.get('balance', '0'))
-
-            if amount_part.lower() == 'all':
-                amount_to_bet = balance
-                amount_str_for_func = str(balance.quantize(Decimal("0.01"), ROUND_HALF_UP))
-            else:
-                amount_to_bet = Decimal(amount_part)
-                amount_str_for_func = amount_part
-
-            if amount_to_bet <= 0:
-                result_message = "Bet amount must be positive."
-            elif amount_to_bet > balance:
-                result_message = f"Insufficient balance. You have ${balance:.2f}, need ${amount_to_bet:.2f}."
-            else:
-                result_message = place_craps_bet(channel_id, user_id, user_name, bet_type, amount_str_for_func, game_data_manager)
-
-            new_text = f"{result_message}\n\n---\n{user_name}, what's next?"
-            keyboard = get_craps_keyboard(channel_id)
-
-        except (IndexError, ValueError, InvalidOperation) as e:
-            logger.error(f"Error parsing place bet callback '{callback_data}': {e}")
-            new_text = f"Error processing bet amount. Please try again.\n\n---\n{user_name}, what's next?"
-            keyboard = get_craps_keyboard(channel_id)
-
+        new_text, keyboard = await _handle_craps_place_bet(callback_data, channel_id, user_id, user_name)
     elif callback_data == CALLBACK_BACK_TO_MAIN:
-        new_text = f"{user_name}, what's next?"
-        keyboard = get_craps_keyboard(channel_id)
-
+        new_text, keyboard = await _handle_craps_back_main(user_name, channel_id)
     elif callback_data == CALLBACK_BET_PLACE_PROMPT:
-        bet_info = (
-            "Place bets (4,5,6,8,9,10), Hard ways (4,6,8,10), and others require the `/bet` command.\n"
-            "Usage: `/bet <type> <amount>`\n"
-            "Example: `/bet place_6 12` or `/bet hard_8 5`\n"
-            "Use `/crapshelp` for more details."
-        )
-        new_text = f"{bet_info}\n\n---\n{user_name}, what's next?"
-        keyboard = get_craps_keyboard(channel_id)
-
+        new_text, keyboard = await _handle_craps_bet_place_prompt(user_name, channel_id)
     else:
         logger.warning(f"Unknown craps callback data received: {callback_data}")
-        edit_message = False
+        edit_message = False # Don't edit if callback is unknown
 
+    # Handle showing the amount keyboard if triggered
     if show_amount_keyboard and bet_type_for_amount:
-        player_data = game_data_manager.get_player_data(channel_id, user_id)
-        balance = Decimal(player_data.get('balance', '0'))
-        if balance <= 0:
-            new_text = f"You have no balance to bet with!\n\n---\n{user_name}, what's next?"
-            keyboard = get_craps_keyboard(channel_id)
-        else:
-            amount_keyboard = get_bet_amount_keyboard(bet_type_for_amount, balance)
-            bet_name = bet_type_for_amount.replace('_', ' ').title()
-            new_text = f"Select amount for {bet_name}: (Balance: ${balance:.2f})"
-            keyboard = amount_keyboard
+        new_text, keyboard = await _handle_craps_show_amount_keyboard(bet_type_for_amount, channel_id, user_id, user_name)
 
-    if edit_message and query.message:
-        try:
-            if query.message.text == new_text and query.message.reply_markup == keyboard:
-                logger.debug("Skipping message edit: content and keyboard are identical.")
-            else:
-                await query.edit_message_text(
-                    text=new_text,
-                    reply_markup=keyboard
-                )
-        except Exception as e:
-            if "Message is not modified" not in str(e):
-                logger.error(f"Failed to edit craps message: {e}")
-                try:
-                    await context.bot.send_message(chat_id=channel_id, text=new_text, reply_markup=keyboard)
-                except Exception as e2:
-                    logger.error(f"Failed to send fallback craps message: {e2}")
+    # Edit the message if required
+    if edit_message:
+        await _edit_or_send_craps_message(query, context, new_text, keyboard, channel_id)
 
 async def bet_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles the /bet command for placing various Craps bets."""
@@ -462,7 +524,8 @@ async def do_resetmygame(channel_id: str, user_id: str, user_name: str) -> str:
     game_data_manager.save_player_data(channel_id, user_id, player_data)
     return f"Your balance has been reset to ${Decimal(start_balance):.2f}. Your bets are cleared."
 
-async def get_showgame_text(channel_id: str, user_id: str, user_name: str) -> str:
+# Modify signature to accept channel_name
+async def get_showgame_text(channel_id: str, user_id: str, user_name: str, channel_name: str | None) -> str:
     """Generates the text for showing the current game state and user status."""
     channel_data = game_data_manager.get_channel_data(channel_id)
     player_data = game_data_manager.get_player_data(channel_id, user_id)
@@ -476,7 +539,9 @@ async def get_showgame_text(channel_id: str, user_id: str, user_name: str) -> st
     point = channel_data.get('craps_point', None)
     state = channel_data.get('craps_state', COME_OUT_PHASE)
 
-    reply_lines = [f"--- Craps Game: Channel {channel_id} ---"]
+    # Use channel_name if available, otherwise use channel_id
+    game_title = channel_name if channel_name else f"Channel {channel_id}"
+    reply_lines = [f"--- Craps Game: {game_title} ---"]
     if point:
         reply_lines.append(f"Point is: {point}")
     else:
