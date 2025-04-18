@@ -1,9 +1,9 @@
 import logging
 import random
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from inflect import engine
-from telegram import Update
-from telegram.ext import ContextTypes
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes, CallbackQueryHandler
 
 # Import replies
 from replies import (
@@ -189,28 +189,225 @@ async def handle_photo_caption(update: Update, context: ContextTypes.DEFAULT_TYP
             await update.message.reply_text(reply)
 
 
-# --- Updated Craps Handlers ---
+# --- Craps Inline Keyboard Setup ---
 
-async def craps_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles the /roll command for playing a Craps round in the current channel."""
+# Define callback data constants
+CALLBACK_ROLL = "craps_roll"
+CALLBACK_SHOW = "craps_show"
+CALLBACK_RESET = "craps_reset"
+CALLBACK_HELP = "craps_help"
+CALLBACK_BET_PASS = "craps_bet_pass_line"
+CALLBACK_BET_FIELD = "craps_bet_field"
+CALLBACK_BET_PLACE_PROMPT = "craps_bet_place_prompt"
+
+# New constants for amount selection
+CALLBACK_PLACE_BET_PREFIX = "craps_place_"  # e.g., craps_place_pass_line_5
+CALLBACK_BACK_TO_MAIN = "craps_back_main"
+
+def get_craps_keyboard(channel_id: str) -> InlineKeyboardMarkup:
+    """Generates the Inline Keyboard for the Craps game."""
+    channel_data = game_data_manager.get_channel_data(channel_id)
+    game_state = channel_data.get('craps_state', COME_OUT_PHASE)
+
+    pass_line_button = InlineKeyboardButton("💰 Bet Pass Line", callback_data=CALLBACK_BET_PASS)
+    keyboard = [
+        [
+            InlineKeyboardButton("🎲 Roll Dice", callback_data=CALLBACK_ROLL),
+            InlineKeyboardButton("📊 Show Game", callback_data=CALLBACK_SHOW),
+        ],
+        [
+            pass_line_button,
+            InlineKeyboardButton("💰 Bet Field", callback_data=CALLBACK_BET_FIELD),
+        ],
+        [
+            InlineKeyboardButton("🔄 Reset My Game", callback_data=CALLBACK_RESET),
+            InlineKeyboardButton("❓ Help", callback_data=CALLBACK_HELP),
+        ],
+        [
+            InlineKeyboardButton("More Bets (/bet cmd)", callback_data=CALLBACK_BET_PLACE_PROMPT)
+        ]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_bet_amount_keyboard(bet_type: str, balance: Decimal) -> InlineKeyboardMarkup:
+    """Generates the keyboard for selecting a bet amount."""
+    buttons = []
+    amounts = [Decimal('1'), Decimal('5'), Decimal('10'), Decimal('25'), Decimal('50'), Decimal('100')]
+    valid_amounts = [a for a in amounts if a <= balance and a > 0]
+
+    row = []
+    for amount in valid_amounts:
+        amount_str = str(amount.to_integral_value()) if amount == amount.to_integral_value() else str(amount)
+        callback_data = f"{CALLBACK_PLACE_BET_PREFIX}{bet_type}_{amount_str}"
+        row.append(InlineKeyboardButton(f"${amount:.2f}", callback_data=callback_data))
+        if len(row) == 3:
+            buttons.append(row)
+            row = []
+    if row:
+        buttons.append(row)
+
+    if balance > 0 and balance not in valid_amounts:
+        all_in_callback = f"{CALLBACK_PLACE_BET_PREFIX}{bet_type}_all"
+        buttons.append([InlineKeyboardButton(f"All In (${balance:.2f})", callback_data=all_in_callback)])
+
+    buttons.append([InlineKeyboardButton("<< Back", callback_data=CALLBACK_BACK_TO_MAIN)])
+
+    return InlineKeyboardMarkup(buttons)
+
+async def start_craps_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends the initial Craps game message with the inline keyboard."""
     if not update.message or not update.effective_chat or not update.effective_user:
-        logger.warning("Craps command received without message, chat, or user info.")
+        logger.warning("Start Craps command received without message, chat, or user info.")
         return
 
     channel_id = str(update.effective_chat.id)
     user_id = str(update.effective_user.id)
+    user_name = update.effective_user.first_name or f"User_{user_id}"
 
-    # Check if the user exists in the channel data, implicitly initializes if not via get_player_data
-    player_data = game_data_manager.get_player_data(channel_id, user_id)
-    if player_data.get('balance') == '100.00' and not player_data.get('craps_bets'):
-         # Check if it's the initial state for this specific user
-         # This check might need refinement if balance can be exactly 100 later
-         await update.message.reply_text(f"Welcome {update.effective_user.first_name}! You start with $100. Use commands like /bet pass_line 10 to bet, then /roll.")
-         # Don't return here, let play_craps_round handle the "no bets" message if applicable
+    game_data_manager.get_player_data(channel_id, user_id)
 
-    # play_craps_round now handles checking for bets and game logic
-    result = play_craps_round(channel_id, game_data_manager)
-    await update.message.reply_text(result)
+    keyboard = get_craps_keyboard(channel_id)
+    await update.message.reply_text(
+        f"🎲 Welcome to Craps, {user_name}! Use the buttons below.",
+        reply_markup=keyboard
+    )
+
+# --- Craps Callback Handler ---
+
+async def craps_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handles button presses from the Craps inline keyboard."""
+    query = update.callback_query
+    if not query or not query.message or not query.from_user or not query.data:
+        logger.warning("Craps callback received without query, message, user, or data.")
+        return
+
+    await query.answer()  # Acknowledge the button press
+
+    channel_id = str(query.message.chat.id)
+    user_id = str(query.from_user.id)
+    user_name = query.from_user.first_name or f"User_{user_id}"
+    callback_data = query.data
+
+    keyboard = get_craps_keyboard(channel_id)
+    new_text = f"{user_name}, what's next?"
+    edit_message = True
+    show_amount_keyboard = False
+    bet_type_for_amount = None
+
+    if callback_data == CALLBACK_ROLL:
+        result = play_craps_round(channel_id, game_data_manager)
+        new_text = f"{result}\n\n---\n{user_name}, what's next?"
+        keyboard = get_craps_keyboard(channel_id)
+
+    elif callback_data == CALLBACK_SHOW:
+        result = await get_showgame_text(channel_id, user_id, user_name)
+        new_text = f"{result}\n\n---\n{user_name}, what's next?"
+
+    elif callback_data == CALLBACK_RESET:
+        result = await do_resetmygame(channel_id, user_id, user_name)
+        new_text = f"{result}\n\n---\n{user_name}, what's next?"
+
+    elif callback_data == CALLBACK_HELP:
+        help_text = get_craps_help_text()
+        await query.message.reply_text(help_text, parse_mode='MarkdownV2')
+        edit_message = False
+
+    elif callback_data == CALLBACK_BET_PASS:
+        channel_data = game_data_manager.get_channel_data(channel_id)
+        game_state = channel_data.get('craps_state', COME_OUT_PHASE)
+        if game_state == POINT_PHASE:
+            new_text = f"Cannot place Pass Line bet when point is established.\n\n---\n{user_name}, what's next?"
+            keyboard = get_craps_keyboard(channel_id)
+        else:
+            show_amount_keyboard = True
+            bet_type_for_amount = 'pass_line'
+
+    elif callback_data == CALLBACK_BET_FIELD:
+        show_amount_keyboard = True
+        bet_type_for_amount = 'field'
+
+    elif callback_data.startswith(CALLBACK_PLACE_BET_PREFIX):
+        try:
+            full_bet_part = callback_data[len(CALLBACK_PLACE_BET_PREFIX):]
+            last_underscore_index = full_bet_part.rfind('_')
+
+            if last_underscore_index == -1:
+                raise ValueError("Invalid callback format: no underscore found after prefix.")
+
+            bet_type = full_bet_part[:last_underscore_index]
+            amount_part = full_bet_part[last_underscore_index + 1:]
+
+            player_data = game_data_manager.get_player_data(channel_id, user_id)
+            balance = Decimal(player_data.get('balance', '0'))
+
+            if amount_part.lower() == 'all':
+                amount_to_bet = balance
+                amount_str_for_func = str(balance.quantize(Decimal("0.01"), ROUND_HALF_UP))
+            else:
+                amount_to_bet = Decimal(amount_part)
+                amount_str_for_func = amount_part
+
+            if amount_to_bet <= 0:
+                result_message = "Bet amount must be positive."
+            elif amount_to_bet > balance:
+                result_message = f"Insufficient balance. You have ${balance:.2f}, need ${amount_to_bet:.2f}."
+            else:
+                result_message = place_craps_bet(channel_id, user_id, user_name, bet_type, amount_str_for_func, game_data_manager)
+
+            new_text = f"{result_message}\n\n---\n{user_name}, what's next?"
+            keyboard = get_craps_keyboard(channel_id)
+
+        except (IndexError, ValueError, InvalidOperation) as e:
+            logger.error(f"Error parsing place bet callback '{callback_data}': {e}")
+            new_text = f"Error processing bet amount. Please try again.\n\n---\n{user_name}, what's next?"
+            keyboard = get_craps_keyboard(channel_id)
+
+    elif callback_data == CALLBACK_BACK_TO_MAIN:
+        new_text = f"{user_name}, what's next?"
+        keyboard = get_craps_keyboard(channel_id)
+
+    elif callback_data == CALLBACK_BET_PLACE_PROMPT:
+        bet_info = (
+            "Place bets (4,5,6,8,9,10), Hard ways (4,6,8,10), and others require the `/bet` command.\n"
+            "Usage: `/bet <type> <amount>`\n"
+            "Example: `/bet place_6 12` or `/bet hard_8 5`\n"
+            "Use `/crapshelp` for more details."
+        )
+        new_text = f"{bet_info}\n\n---\n{user_name}, what's next?"
+        keyboard = get_craps_keyboard(channel_id)
+
+    else:
+        logger.warning(f"Unknown craps callback data received: {callback_data}")
+        edit_message = False
+
+    if show_amount_keyboard and bet_type_for_amount:
+        player_data = game_data_manager.get_player_data(channel_id, user_id)
+        balance = Decimal(player_data.get('balance', '0'))
+        if balance <= 0:
+            new_text = f"You have no balance to bet with!\n\n---\n{user_name}, what's next?"
+            keyboard = get_craps_keyboard(channel_id)
+        else:
+            amount_keyboard = get_bet_amount_keyboard(bet_type_for_amount, balance)
+            bet_name = bet_type_for_amount.replace('_', ' ').title()
+            new_text = f"Select amount for {bet_name}: (Balance: ${balance:.2f})"
+            keyboard = amount_keyboard
+
+    if edit_message and query.message:
+        try:
+            if query.message.text == new_text and query.message.reply_markup == keyboard:
+                logger.debug("Skipping message edit: content and keyboard are identical.")
+            else:
+                await query.edit_message_text(
+                    text=new_text,
+                    reply_markup=keyboard
+                )
+        except Exception as e:
+            if "Message is not modified" not in str(e):
+                logger.error(f"Failed to edit craps message: {e}")
+                try:
+                    await context.bot.send_message(chat_id=channel_id, text=new_text, reply_markup=keyboard)
+                except Exception as e2:
+                    logger.error(f"Failed to send fallback craps message: {e2}")
 
 async def bet_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles the /bet command for placing various Craps bets."""
@@ -220,17 +417,19 @@ async def bet_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     channel_id = str(update.effective_chat.id)
     user_id = str(update.effective_user.id)
-    # Get user's name to pass to the bet function
-    user_name = update.effective_user.first_name or f"User_{user_id}" # Fallback if first_name is not available
+    user_name = update.effective_user.first_name or f"User_{user_id}"
 
     if len(context.args) < 2:
-        await update.message.reply_text("Usage: /bet <bet_type> <amount>\nExample: /bet pass_line 10\nValid types: pass_line, dont_pass, field, place_4, place_5, place_6, place_8, place_9, place_10")
+        await update.message.reply_text(
+            "Usage: /bet <bet_type> <amount>\n"
+            "Example: /bet pass_line 10\n"
+            "Use the 'Place Bet (Info)' button or /crapshelp for valid types."
+        )
         return
 
     bet_type = context.args[0].lower()
     amount_str = context.args[1]
 
-    # Special handling for place bets needing a number
     if bet_type == 'place' and len(context.args) == 3:
         try:
             place_num = int(context.args[1])
@@ -238,70 +437,41 @@ async def bet_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 bet_type = f"place_{place_num}"
                 amount_str = context.args[2]
             else:
-                 await update.message.reply_text("Invalid number for Place Bet. Use 4, 5, 6, 8, 9, or 10.")
-                 return
+                await update.message.reply_text("Invalid number for Place Bet. Use 4, 5, 6, 8, 9, or 10.")
+                return
         except ValueError:
-             await update.message.reply_text("Invalid number for Place Bet.")
-             return
+            await update.message.reply_text("Invalid number for Place Bet.")
+            return
         except IndexError:
-             await update.message.reply_text("Usage: /bet place <number> <amount>")
-             return
-    elif bet_type == 'place': # Incorrect usage without number/amount
-         await update.message.reply_text("Usage: /bet place <number> <amount>")
-         return
+            await update.message.reply_text("Usage: /bet place <number> <amount>")
+            return
+    elif bet_type == 'place':
+        await update.message.reply_text("Usage: /bet place <number> <amount>")
+        return
 
-    # Call the unified place_bet function from craps_game
-    # Corrected argument order: channel_id, user_id, user_name, bet_type, amount_str, data_manager
     message = place_craps_bet(channel_id, user_id, user_name, bet_type, amount_str, game_data_manager)
-
     await update.message.reply_text(message)
 
-async def resetmygame_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Resets the calling user's Craps balance and bets within the current channel."""
-    if not update.message or not update.effective_chat or not update.effective_user:
-        logger.warning("Reset command received without message, chat, or user info.")
-        return
-
-    channel_id = str(update.effective_chat.id)
-    user_id = str(update.effective_user.id)
-    user_name = update.effective_user.first_name or f"User_{user_id}" # Get username
-    start_balance = '100.00'  # Default starting balance as string
-
-    # Get current data (or initialize if new)
+async def do_resetmygame(channel_id: str, user_id: str, user_name: str) -> str:
+    """Resets the user's Craps balance and bets. Returns status message."""
+    start_balance = '100.00'
     player_data = game_data_manager.get_player_data(channel_id, user_id)
-
-    # Reset user-specific fields and update display name
     player_data['balance'] = start_balance
     player_data['craps_bets'] = {}
-    player_data['display_name'] = user_name # Ensure display name is stored/updated
-    # Do NOT reset channel state (point, game_state) here
-
-    # Save the updated data for this user
+    player_data['display_name'] = user_name
     game_data_manager.save_player_data(channel_id, user_id, player_data)
+    return f"Your balance has been reset to ${Decimal(start_balance):.2f}. Your bets are cleared."
 
-    await update.message.reply_text(f"Your balance has been reset to ${Decimal(start_balance):.2f}. Your bets in this channel are cleared. Good luck!")
-
-async def showgame_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Shows current Craps game state for the channel and the user's balance/bets."""
-    if not update.message or not update.effective_chat or not update.effective_user:
-        logger.warning("Showgame command received without message, chat, or user info.")
-        return
-
-    channel_id = str(update.effective_chat.id)
-    user_id = str(update.effective_user.id)
-    user_name = update.effective_user.first_name or f"User_{user_id}" # Get username
-
-    # Get channel and player data
+async def get_showgame_text(channel_id: str, user_id: str, user_name: str) -> str:
+    """Generates the text for showing the current game state and user status."""
     channel_data = game_data_manager.get_channel_data(channel_id)
     player_data = game_data_manager.get_player_data(channel_id, user_id)
 
-    # Update display name in data when showing game info
     if player_data.get('display_name') != user_name:
         player_data['display_name'] = user_name
         game_data_manager.save_player_data(channel_id, user_id, player_data)
 
-
-    balance = Decimal(player_data.get('balance', '100.00')) # Default if somehow missing after get
+    balance = Decimal(player_data.get('balance', '100.00'))
     bets = player_data.get('craps_bets', {})
     point = channel_data.get('craps_point', None)
     state = channel_data.get('craps_state', COME_OUT_PHASE)
@@ -312,7 +482,6 @@ async def showgame_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     else:
         reply_lines.append("Phase: Come Out Roll")
 
-    # Use the fetched/updated user_name
     reply_lines.append(f"\n--- Your Status ({user_name}) ---")
     reply_lines.append(f"Balance: ${balance:.2f}")
 
@@ -325,39 +494,43 @@ async def showgame_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 amount_dec = Decimal(amount)
                 reply_lines.append(f"- {bet_type.replace('_',' ').title()}: ${amount_dec:.2f}")
             except InvalidOperation:
-                 reply_lines.append(f"- {bet_type.replace('_',' ').title()}: Invalid Amount ({amount})") # Log error?
+                reply_lines.append(f"- {bet_type.replace('_',' ').title()}: Invalid Amount ({amount})")
 
-    await update.message.reply_text("\n".join(reply_lines))
+    return "\n".join(reply_lines)
 
-async def crapshelp_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Provides help text for Craps rules and commands using MarkdownV2 with minimal formatting."""
+def get_craps_help_text() -> str:
+    """Returns the Craps help text (MarkdownV2 formatted)."""
     help_text = """
 🎲 **Craps Rules & Bot Commands** 🎲
 
 *Basic Gameplay:*
-\.\.\. (Rules remain the same) \.\.\.
+\- The first roll is the "Come Out" roll\.
+\- If you roll a 7 or 11 \(Natural\), Pass Line bets win, Don't Pass loses\. New Come Out roll\.
+\- If you roll a 2, 3, or 12 \(Craps\), Pass Line bets lose\. Don't Pass wins on 2 or 3, pushes \(ties\) on 12\. New Come Out roll\.
+\- If you roll any other number \(4, 5, 6, 8, 9, 10\), that number becomes the "Point"\.
+
+*Point Phase:*
+\- The goal is to roll the Point number again *before* rolling a 7\.
+\- If the Point is rolled, Pass Line bets win, Don't Pass loses\. Game resets to Come Out roll\.
+\- If a 7 is rolled \("Seven Out"\), Pass Line bets lose, Don't Pass wins\. Game resets to Come Out roll\.
+\- Other rolls don't resolve Pass/Don't Pass, you keep rolling\.
 
 *Bet Types Implemented:*
-\- Pass Line \(pass\_line\)
-\- Don't Pass \(dont\_pass\)
-\- Field \(field\)
-\- Place Bets \(place\_4, place\_5, place\_6, place\_8, place\_9, place\_10\)
-\(See previous help or rules online for details on each bet\)
+\- `pass_line`: Wins on Natural or Point hit, loses on Craps or Seven Out\.
+\- `dont_pass`: Wins on Craps \(2,3\), pushes on 12, loses on Natural\. Wins on Seven Out, loses if Point hit\.
+\- `field`: One roll bet\. Wins if 2, 3, 4, 9, 10, 11 rolled\. Pays double on 2, triple on 12\. Loses on 5, 6, 7, 8\.
+\- `place_X`: Bet that number X \(4,5,6,8,9,10\) will roll before a 7\. Only active during Point Phase\. Loses on 7\.
+\- `hard_X`: Bet that X \(4,6,8,10\) will roll as doubles \(e\.g\., 2\+2 for hard 4\) before a 7 or the "easy" way \(e\.g\., 1\+3 for easy 4\)\.
+\- `any_craps`: One roll bet\. Wins if 2, 3, or 12 rolled\.
+\- `any_seven`: One roll bet\. Wins if 7 rolled\.
+\- `two`/`three`/`eleven`/`twelve`: One roll bet on specific number\. High payouts\.
+\- `horn`: One roll bet split 4 ways on 2, 3, 11, 12\. Wins if any hit, pays based on number rolled\. Must be divisible by 4\.
 
-*Bot Commands:*
-
-\- `/roll`: Roll the dice for the channel\. You must have an active bet\.
-\- `/bet <type> <amount>`: Place a bet\. 
-    \- Examples:
-        \- `/bet pass_line 10`
-        \- `/bet field 5`
-        \- `/bet place_6 12` \(or `/bet place 6 12`\)
-    \- Valid types: `pass_line`, `dont_pass`, `field`, `place_4`, `place_5`, `place_6`, `place_8`, `place_9`, `place_10`\.
-    \- Note: `pass_line` and `dont_pass` only allowed on Come Out roll\. `place_*` bets only allowed when Point is established\.
-\- `/showgame`: Show channel game state and your balance/bets\.
-\- `/resetmygame`: Reset your balance to $100 and clear your bets in this channel\.
-\- `/crapshelp`: Show this help message\.
+*Bot Interaction:*
+\- Use the buttons below the Craps message\.
+\- `/bet <type> <amount>`: Use this command separately to place bets\. Example: `/bet field 5`
+\- `/craps`: Starts a new Craps game interface if needed\.
 
 \(More bet types may be added later\!\)
 """
-    await update.message.reply_text(help_text, parse_mode='MarkdownV2')
+    return help_text
