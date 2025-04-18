@@ -4,12 +4,10 @@ import os
 from pathlib import Path
 from decimal import Decimal
 from collections import defaultdict
-from config import ANSWERS_FILE, GAME_DATA_FILE, BASE_DIR # Assuming GAME_DATA_FILE is defined in config
+# Import BOOM_COUNT_FILE from config
+from config import ANSWERS_FILE, GAME_DATA_FILE, BOOM_COUNT_FILE
 
 logger = logging.getLogger(__name__)
-
-# Define BOOM_COUNT_FILE using BASE_DIR from config
-BOOM_COUNT_FILE = BASE_DIR / "boom_count.json"
 
 # --- Boom Count Logic ---
 boom_count: int = 0
