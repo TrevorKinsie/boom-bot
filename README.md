@@ -1,6 +1,6 @@
 # Boom Bot
 
-A simple Telegram bot that reacts with 💥 or sends explosion emojis.
+A Telegram bot that provides boom counts and plays Craps.
 
 ## Features
 
@@ -9,7 +9,9 @@ A simple Telegram bot that reacts with 💥 or sends explosion emojis.
 *   `/boom <number > 5>`: Sends a sassy reply.
 *   `/boom <number < 1>`: Sends a different sassy reply.
 *   `/boom <non-number>`: Sends a sassy reply about needing a number.
-*   Replying to a message with `/boom`: Adds a 💥 reaction to the replied message.
+*   `/howmanybooms <question>`: Asks the bot how many booms something deserves (e.g., `/howmanybooms does my cat deserve`). The bot remembers questions and provides consistent (randomly assigned) answers using NLTK for fuzzy matching.
+*   Sending a photo with `/howmanybooms <question>` in the caption: Same as the text command, but triggered by a photo caption.
+*   `/passline`: Starts or continues a game of Craps. The bot manages the game state (Come Out, Point) for each user.
 
 ## Running the Bot
 
@@ -32,6 +34,7 @@ A simple Telegram bot that reacts with 💥 or sends explosion emojis.
     ```bash
     pip install -r requirements.txt
     ```
+    *(Note: This will also download necessary NLTK data on first run if not present.)*
 
 4.  **Get a Telegram Bot Token:**
     *   Talk to [@BotFather](https://t.me/BotFather) on Telegram.
