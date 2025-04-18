@@ -5,9 +5,12 @@ primary_region = "iad" # Choose a region close to you or your users
 
 [build]
   # Tells Fly to use the Dockerfile in the root directory
-  builder = "dockerfile" # Explicitly use Dockerfile builder
   dockerfile = "Dockerfile"
-  buildpacks = [] # Explicitly disable buildpacks
+
+# Mount the persistent volume
+[mounts]
+  source="bot_data"
+  destination="/data"
 
 # Optional: Define internal port if needed for health checks
 # [http_service]

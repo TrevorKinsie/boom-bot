@@ -12,7 +12,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Download NLTK data
-RUN python -m nltk.downloader punkt wordnet averaged_perceptron_tagger
+RUN python -m nltk.downloader punkt wordnet averaged_perceptron_tagger stopwords
 
 # Copy the rest of the application code into the container at /app
 COPY . .
