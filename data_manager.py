@@ -4,29 +4,59 @@ import os
 from pathlib import Path
 from decimal import Decimal
 from collections import defaultdict
-from config import ANSWERS_FILE, GAME_DATA_FILE # Assuming GAME_DATA_FILE is defined in config
+from config import ANSWERS_FILE, GAME_DATA_FILE, BASE_DIR # Assuming GAME_DATA_FILE is defined in config
 
 logger = logging.getLogger(__name__)
+
+# Define BOOM_COUNT_FILE using BASE_DIR from config
+BOOM_COUNT_FILE = BASE_DIR / "boom_count.json"
+
+# --- Boom Count Logic ---
+boom_count: int = 0
+
+def load_boom_count() -> int:
+    """Loads the boom count from its JSON file."""
+    global boom_count
+    if BOOM_COUNT_FILE.exists(): # Use the constant
+        try:
+            with open(BOOM_COUNT_FILE, 'r') as f: # Use the constant
+                data = json.load(f)
+                boom_count = data.get("boom_count", 0)
+        except (json.JSONDecodeError, IOError) as e:
+            logger.error(f"Error loading boom count file: {e}")
+            boom_count = 0
+    else:
+        boom_count = 0
+    return boom_count
+
+def save_boom_count():
+    """Saves the current boom count to its JSON file."""
+    global boom_count
+    try:
+        with open(BOOM_COUNT_FILE, 'w') as f: # Use the constant
+            json.dump({"boom_count": boom_count}, f)
+    except IOError as e:
+        logger.error(f"Error saving boom count file: {e}")
 
 # --- Existing Question/Answer Logic (kept separate for now) ---
 # Store only the count now {normalized_question: count}
 question_answers: dict[str, int] = {}
 
 def load_answers():
-    """Loads question answers from the JSON file."""
     global question_answers
-    if ANSWERS_FILE.exists():
-        try:
-            with open(ANSWERS_FILE, 'r', encoding='utf-8') as f:
-                # Ensure loaded values are integers
-                loaded_data = json.load(f)
-                # Filter out potential non-string keys or non-int values if file was manually edited
-                question_answers = {str(k): int(v) for k, v in loaded_data.items() if isinstance(k, str) and isinstance(v, (int, float))}
-        except (json.JSONDecodeError, IOError, ValueError, TypeError) as e:
-            logger.error(f"Error loading or parsing answers file: {e}")
-            question_answers = {} # Reset if file is corrupt or invalid format
-    else:
-        question_answers = {}
+    try:
+        if os.path.exists(ANSWERS_FILE):
+            with open(ANSWERS_FILE, 'r') as f:
+                question_answers = json.load(f)
+                # Return the loaded data, not None
+                return question_answers
+        else:
+            question_answers = {} # Ensure global is empty dict if file not found
+            return question_answers # Return empty dict
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        logger.error(f"Error loading or parsing answers file: {e}")
+        question_answers = {} # Reset global to empty dict on error
+        return question_answers # Return empty dict on error
 
 
 def save_answers():
@@ -43,9 +73,10 @@ def get_answers() -> dict[str, int]:
     return question_answers
 
 def update_answer(key: str, value: int):
-    """Updates or adds an answer to the dictionary."""
+    """Updates or adds an answer to the dictionary and saves.""" # Updated docstring
     global question_answers
     question_answers[key] = value
+    save_answers() # Call save_answers after updating
 
 # --- New DataManager Class for Game State ---
 

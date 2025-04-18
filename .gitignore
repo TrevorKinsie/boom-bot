@@ -2,3 +2,4 @@
 __pycache__/
 question_answers.json
 game_data.json
+logs/error.log

@@ -17,6 +17,7 @@ from handlers import (
     craps_callback_handler,
     bet_command
 )
+from config import TELEGRAM_TOKEN # Corrected import name
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -38,17 +39,12 @@ file_handler.setFormatter(log_formatter)
 file_handler.setLevel(logging.ERROR)
 logger.addHandler(file_handler)
 
-# --- Setup ---
-setup_nltk()
-load_answers()
-
-# --- Main Bot Function ---
-def main() -> None:
-    """Start the bot."""
-    token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    if not token:
-        logger.error("TELEGRAM_BOT_TOKEN environment variable not set.")
-        return
+# --- Application Setup ---
+def create_application(token: str) -> Application:
+    """Builds and configures the Telegram bot application."""
+    # Perform setup when creating the application
+    setup_nltk()
+    load_answers()
 
     application = Application.builder().token(token).build()
 
@@ -61,6 +57,18 @@ def main() -> None:
     application.add_handler(CommandHandler("craps", start_craps_command))
     application.add_handler(CallbackQueryHandler(craps_callback_handler, pattern='^craps_')) # Pattern matches our callback data
     application.add_handler(CommandHandler("bet", bet_command))
+
+    return application
+
+# --- Main Bot Function ---
+def main() -> None:
+    """Start the bot."""
+    # token = os.environ.get("TELEGRAM_BOT_TOKEN") # Get token from config instead
+    if not TELEGRAM_TOKEN: # Use corrected token name
+        logger.error("TELEGRAM_TOKEN not set in config.py or environment.")
+        return
+
+    application = create_application(TELEGRAM_TOKEN) # Use corrected token name
 
     logger.info("Starting bot...")
     application.run_polling()

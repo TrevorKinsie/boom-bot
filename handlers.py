@@ -511,6 +511,7 @@ async def bet_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text("Usage: /bet place <number> <amount>")
         return
 
+    # Call place_craps_bet synchronously (it's not async)
     message = place_craps_bet(channel_id, user_id, user_name, bet_type, amount_str, game_data_manager)
     await update.message.reply_text(message)
 
@@ -565,37 +566,38 @@ async def get_showgame_text(channel_id: str, user_id: str, user_name: str, chann
 
 def get_craps_help_text() -> str:
     """Returns the Craps help text (MarkdownV2 formatted)."""
+    # Double-escape backslashes for MarkdownV2
     help_text = """
 🎲 **Craps Rules & Bot Commands** 🎲
 
 *Basic Gameplay:*
-\- The first roll is the "Come Out" roll\.
-\- If you roll a 7 or 11 \(Natural\), Pass Line bets win, Don't Pass loses\. New Come Out roll\.
-\- If you roll a 2, 3, or 12 \(Craps\), Pass Line bets lose\. Don't Pass wins on 2 or 3, pushes \(ties\) on 12\. New Come Out roll\.
-\- If you roll any other number \(4, 5, 6, 8, 9, 10\), that number becomes the "Point"\.
+- The first roll is the "Come Out" roll\\
+- If you roll a 7 or 11 \\(Natural\\), Pass Line bets win, Don't Pass loses\\. New Come Out roll\\
+- If you roll a 2, 3, or 12 \\(Craps\\), Pass Line bets lose\\. Don't Pass wins on 2 or 3, pushes \\(ties\\) on 12\\. New Come Out roll\\
+- If you roll any other number \\(4, 5, 6, 8, 9, 10\\), that number becomes the "Point"\\
 
 *Point Phase:*
-\- The goal is to roll the Point number again *before* rolling a 7\.
-\- If the Point is rolled, Pass Line bets win, Don't Pass loses\. Game resets to Come Out roll\.
-\- If a 7 is rolled \("Seven Out"\), Pass Line bets lose, Don't Pass wins\. Game resets to Come Out roll\.
-\- Other rolls don't resolve Pass/Don't Pass, you keep rolling\.
+- The goal is to roll the Point number again *before* rolling a 7\\
+- If the Point is rolled, Pass Line bets win, Don't Pass loses\\. Game resets to Come Out roll\\
+- If a 7 is rolled \\("Seven Out"\\), Pass Line bets lose, Don't Pass wins\\. Game resets to Come Out roll\\
+- Other rolls don't resolve Pass/Don't Pass, you keep rolling\\
 
 *Bet Types Implemented:*
-\- `pass_line`: Wins on Natural or Point hit, loses on Craps or Seven Out\.
-\- `dont_pass`: Wins on Craps \(2,3\), pushes on 12, loses on Natural\. Wins on Seven Out, loses if Point hit\.
-\- `field`: One roll bet\. Wins if 2, 3, 4, 9, 10, 11 rolled\. Pays double on 2, triple on 12\. Loses on 5, 6, 7, 8\.
-\- `place_X`: Bet that number X \(4,5,6,8,9,10\) will roll before a 7\. Only active during Point Phase\. Loses on 7\.
-\- `hard_X`: Bet that X \(4,6,8,10\) will roll as doubles \(e\.g\., 2\+2 for hard 4\) before a 7 or the "easy" way \(e\.g\., 1\+3 for easy 4\)\.
-\- `any_craps`: One roll bet\. Wins if 2, 3, or 12 rolled\.
-\- `any_seven`: One roll bet\. Wins if 7 rolled\.
-\- `two`/`three`/`eleven`/`twelve`: One roll bet on specific number\. High payouts\.
-\- `horn`: One roll bet split 4 ways on 2, 3, 11, 12\. Wins if any hit, pays based on number rolled\. Must be divisible by 4\.
+- `pass_line`: Wins on Natural or Point hit, loses on Craps or Seven Out\\
+- `dont_pass`: Wins on Craps \\(2,3\\), pushes on 12, loses on Natural\\. Wins on Seven Out, loses if Point hit\\
+- `field`: One roll bet\\. Wins if 2, 3, 4, 9, 10, 11 rolled\\. Pays double on 2, triple on 12\\. Loses on 5, 6, 7, 8\\
+- `place_X`: Bet that number X \\(4,5,6,8,9,10\\) will roll before a 7\\. Only active during Point Phase\\. Loses on 7\\
+- `hard_X`: Bet that X \\(4,6,8,10\\) will roll as doubles \\(e\\.g\\., 2\\+2 for hard 4\\) before a 7 or the "easy" way \\(e\\.g\\., 1\\+3 for easy 4\\)\\
+- `any_craps`: One roll bet\\. Wins if 2, 3, or 12 rolled\\
+- `any_seven`: One roll bet\\. Wins if 7 rolled\\
+- `two`/`three`/`eleven`/`twelve`: One roll bet on specific number\\. High payouts\\
+- `horn`: One roll bet split 4 ways on 2, 3, 11, 12\\. Wins if any hit, pays based on number rolled\\. Must be divisible by 4\\
 
 *Bot Interaction:*
-\- Use the buttons below the Craps message\.
-\- `/bet <type> <amount>`: Use this command separately to place bets\. Example: `/bet field 5`
-\- `/craps`: Starts a new Craps game interface if needed\.
+- Use the buttons below the Craps message\\
+- `/bet <type> <amount>`: Use this command separately to place bets\\. Example: `/bet field 5`
+- `/craps`: Starts a new Craps game interface if needed\\
 
-\(More bet types may be added later\!\)
+\\(More bet types may be added later\\!\\)
 """
     return help_text
