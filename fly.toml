@@ -1,0 +1,21 @@
+# fly.toml file generated for boom-bot
+
+app = "boom-bot" # Replace with your desired app name on Fly.io
+primary_region = "iad" # Choose a region close to you or your users
+
+[build]
+  # Tells Fly to use the Dockerfile in the root directory
+  dockerfile = "Dockerfile"
+
+# Optional: Define internal port if needed for health checks
+# [http_service]
+#   internal_port = 8080
+#   force_https = true
+#   auto_stop_machines = true
+#   auto_start_machines = true
+#   min_machines_running = 0 # Set to 1 if you want it always running
+
+# Define the command to run your application
+# This is usually handled by the Dockerfile's CMD, but can be overridden here if needed.
+# [processes]
+#   app = "python bot.py"
