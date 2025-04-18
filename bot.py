@@ -10,14 +10,12 @@ from handlers import (
     boom_command,
     booms_command,
     handle_photo_caption,
-    craps_command,
-    passline_command,
-    dontpass_command,
-    field_command,
-    place_command,
-    showbets_command,
-    resetbalance_command, # Import the new reset command handler
-    crapshelp_command  # Import the new help command handler
+    craps_command,      # Renamed from play_craps to handle /roll
+    bet_command,        # New unified bet command handler
+    showgame_command,   # Renamed from showbets_command
+    resetmygame_command,# Renamed from resetbalance_command
+    crapshelp_command
+    # Old individual bet handlers removed
 )
 
 load_dotenv()  # Load environment variables from .env file
@@ -47,15 +45,18 @@ def main() -> None:
     application.add_handler(CommandHandler("howmanybooms", booms_command))
     application.add_handler(MessageHandler(filters.PHOTO & filters.CAPTION, handle_photo_caption))
     
-    # Craps game handlers
-    application.add_handler(CommandHandler("roll", craps_command))
-    application.add_handler(CommandHandler("showbets", showbets_command)) # Show bets
-    application.add_handler(CommandHandler("passline", passline_command))
-    application.add_handler(CommandHandler("dontpass", dontpass_command)) # Add Don't Pass
-    application.add_handler(CommandHandler("field", field_command))       # Add Field
-    application.add_handler(CommandHandler("place", place_command))       # Add Place
-    application.add_handler(CommandHandler("resetbalance", resetbalance_command)) # Register the reset command
-    application.add_handler(CommandHandler("crapshelp", crapshelp_command)) # Register the help command
+    # Updated Craps game handlers
+    application.add_handler(CommandHandler("roll", craps_command))       # Handles dice roll for the channel
+    application.add_handler(CommandHandler("bet", bet_command))         # Handles placing all bet types
+    application.add_handler(CommandHandler("showgame", showgame_command)) # Renamed from showbets
+    application.add_handler(CommandHandler("resetmygame", resetmygame_command)) # Renamed from resetbalance
+    application.add_handler(CommandHandler("crapshelp", crapshelp_command))
+    
+    # Remove old individual bet handlers
+    # application.add_handler(CommandHandler("passline", passline_command))
+    # application.add_handler(CommandHandler("dontpass", dontpass_command))
+    # application.add_handler(CommandHandler("field", field_command))
+    # application.add_handler(CommandHandler("place", place_command))
 
     logger.info("Starting bot...")
     application.run_polling()

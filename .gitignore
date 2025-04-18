@@ -1,3 +1,4 @@
 .env
 __pycache__/
 question_answers.json
+game_data.json

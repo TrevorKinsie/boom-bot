@@ -1,6 +1,6 @@
 import logging
 import random
-from decimal import Decimal, InvalidOperation  # Import Decimal
+from decimal import Decimal, InvalidOperation
 from inflect import engine
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -15,41 +15,22 @@ from replies import (
     SASSY_REPLIES_WHAT
 )
 
-# Import data management functions
+# Import data management functions and class
 import data_manager
+from data_manager import DataManager
 
 # Import NLTK utility functions
 from nltk_utils import normalize_question_nltk, normalize_question_simple, extract_subject
 
 # Import Craps game logic and constants
-from craps_game import play_craps, COME_OUT_PHASE, POINT_PHASE
+from craps_game import play_craps_round, place_bet as place_craps_bet, COME_OUT_PHASE, POINT_PHASE
 
 logger = logging.getLogger(__name__)
 p = engine()  # Initialize inflect engine
 
-# --- Helper Function for Bet Placement ---
-def _place_bet(user_data: dict, bet_type: str, bet_amount_str: str) -> tuple[str | None, str]:
-    """Helper to validate and place a bet."""
-    try:
-        bet_amount = Decimal(bet_amount_str)
-        if bet_amount <= 0:
-            return None, "Bet amount must be positive."
-    except InvalidOperation:
-        return None, "Invalid bet amount. Please enter a number."
-
-    balance = Decimal(user_data.get('balance', '0'))
-    if bet_amount > balance:
-        return None, f"Insufficient funds. Your balance is ${balance:.2f}."
-
-    # Initialize bets dict if needed
-    if 'craps_bets' not in user_data:
-        user_data['craps_bets'] = {}
-
-    # Add or update bet
-    user_data['craps_bets'][bet_type] = str(bet_amount)  # Store as string
-    user_data['balance'] = str(balance - bet_amount)  # Store as string
-
-    return bet_type, f"Bet of ${bet_amount:.2f} placed on {bet_type.replace('_',' ').title()}. New balance: ${user_data['balance']}."
+# --- Instantiate DataManager ---
+# Create a single instance to manage all game data
+game_data_manager = DataManager()
 
 # --- Command Handlers ---
 
@@ -208,226 +189,175 @@ async def handle_photo_caption(update: Update, context: ContextTypes.DEFAULT_TYP
             await update.message.reply_text(reply)
 
 
+# --- Updated Craps Handlers ---
+
 async def craps_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles the /roll command for playing a Craps round."""
-    user_data = context.user_data
-    # Initialize balance if it doesn't exist (redundant but safe)
-    if 'balance' not in user_data:
-        user_data['balance'] = '100'
-        await update.message.reply_text("Welcome to Craps! You start with $100. Use commands like /passline <amount> to bet, then /roll.")
+    """Handles the /roll command for playing a Craps round in the current channel."""
+    if not update.message or not update.effective_chat or not update.effective_user:
+        logger.warning("Craps command received without message, chat, or user info.")
         return
 
-    # Check if any bets are placed before rolling
-    if not user_data.get('craps_bets'):
-        await update.message.reply_text("No bets placed. Use commands like /passline, /dontpass, /field, /place to bet first.")
-        return
+    channel_id = str(update.effective_chat.id)
+    user_id = str(update.effective_user.id)
 
-    result = play_craps(user_data)
+    # Check if the user exists in the channel data, implicitly initializes if not via get_player_data
+    player_data = game_data_manager.get_player_data(channel_id, user_id)
+    if player_data.get('balance') == '100.00' and not player_data.get('craps_bets'):
+         # Check if it's the initial state for this specific user
+         # This check might need refinement if balance can be exactly 100 later
+         await update.message.reply_text(f"Welcome {update.effective_user.first_name}! You start with $100. Use commands like /bet pass_line 10 to bet, then /roll.")
+         # Don't return here, let play_craps_round handle the "no bets" message if applicable
+
+    # play_craps_round now handles checking for bets and game logic
+    result = play_craps_round(channel_id, game_data_manager)
     await update.message.reply_text(result)
 
-
-async def passline_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles the /passline command to place a bet for Craps."""
-    user_data = context.user_data
-    # Initialize balance if it doesn't exist
-    if 'balance' not in user_data:
-        user_data['balance'] = '100'  # Starting balance as string
-
-    game_state = user_data.get('craps_state', COME_OUT_PHASE)
-
-    if game_state == POINT_PHASE:
-        await update.message.reply_text("Cannot place Pass Line bet when point is established. Use /roll or other bets.")
+async def bet_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handles the /bet command for placing various Craps bets."""
+    if not update.message or not update.effective_chat or not update.effective_user:
+        logger.warning("Bet command received without message, chat, or user info.")
         return
 
-    if not context.args:
-        await update.message.reply_text("Usage: /passline <amount>")
+    channel_id = str(update.effective_chat.id)
+    user_id = str(update.effective_user.id)
+    # Get user's name to pass to the bet function
+    user_name = update.effective_user.first_name or f"User_{user_id}" # Fallback if first_name is not available
+
+    if len(context.args) < 2:
+        await update.message.reply_text("Usage: /bet <bet_type> <amount>\nExample: /bet pass_line 10\nValid types: pass_line, dont_pass, field, place_4, place_5, place_6, place_8, place_9, place_10")
         return
 
-    bet_type, message = _place_bet(user_data, 'pass_line', context.args[0])
+    bet_type = context.args[0].lower()
+    amount_str = context.args[1]
 
-    if bet_type:
-        message += " Roll the dice! /roll"
+    # Special handling for place bets needing a number
+    if bet_type == 'place' and len(context.args) == 3:
+        try:
+            place_num = int(context.args[1])
+            if place_num in [4, 5, 6, 8, 9, 10]:
+                bet_type = f"place_{place_num}"
+                amount_str = context.args[2]
+            else:
+                 await update.message.reply_text("Invalid number for Place Bet. Use 4, 5, 6, 8, 9, or 10.")
+                 return
+        except ValueError:
+             await update.message.reply_text("Invalid number for Place Bet.")
+             return
+        except IndexError:
+             await update.message.reply_text("Usage: /bet place <number> <amount>")
+             return
+    elif bet_type == 'place': # Incorrect usage without number/amount
+         await update.message.reply_text("Usage: /bet place <number> <amount>")
+         return
+
+    # Call the unified place_bet function from craps_game
+    # Corrected argument order: channel_id, user_id, user_name, bet_type, amount_str, data_manager
+    message = place_craps_bet(channel_id, user_id, user_name, bet_type, amount_str, game_data_manager)
 
     await update.message.reply_text(message)
 
-
-async def dontpass_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles the /dontpass command."""
-    user_data = context.user_data
-    if 'balance' not in user_data:
-        user_data['balance'] = '100'
-    game_state = user_data.get('craps_state', COME_OUT_PHASE)
-
-    if game_state == POINT_PHASE:
-        await update.message.reply_text("Cannot place Don't Pass bet when point is established. Use /roll or other bets.")
+async def resetmygame_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Resets the calling user's Craps balance and bets within the current channel."""
+    if not update.message or not update.effective_chat or not update.effective_user:
+        logger.warning("Reset command received without message, chat, or user info.")
         return
 
-    if not context.args:
-        await update.message.reply_text("Usage: /dontpass <amount>")
+    channel_id = str(update.effective_chat.id)
+    user_id = str(update.effective_user.id)
+    user_name = update.effective_user.first_name or f"User_{user_id}" # Get username
+    start_balance = '100.00'  # Default starting balance as string
+
+    # Get current data (or initialize if new)
+    player_data = game_data_manager.get_player_data(channel_id, user_id)
+
+    # Reset user-specific fields and update display name
+    player_data['balance'] = start_balance
+    player_data['craps_bets'] = {}
+    player_data['display_name'] = user_name # Ensure display name is stored/updated
+    # Do NOT reset channel state (point, game_state) here
+
+    # Save the updated data for this user
+    game_data_manager.save_player_data(channel_id, user_id, player_data)
+
+    await update.message.reply_text(f"Your balance has been reset to ${Decimal(start_balance):.2f}. Your bets in this channel are cleared. Good luck!")
+
+async def showgame_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Shows current Craps game state for the channel and the user's balance/bets."""
+    if not update.message or not update.effective_chat or not update.effective_user:
+        logger.warning("Showgame command received without message, chat, or user info.")
         return
 
-    bet_type, message = _place_bet(user_data, 'dont_pass', context.args[0])
+    channel_id = str(update.effective_chat.id)
+    user_id = str(update.effective_user.id)
+    user_name = update.effective_user.first_name or f"User_{user_id}" # Get username
 
-    if bet_type:
-        message += " Roll the dice! /roll"
+    # Get channel and player data
+    channel_data = game_data_manager.get_channel_data(channel_id)
+    player_data = game_data_manager.get_player_data(channel_id, user_id)
 
-    await update.message.reply_text(message)
-
-
-async def field_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles the /field command."""
-    user_data = context.user_data
-    if 'balance' not in user_data:
-        user_data['balance'] = '100'
-
-    if not context.args:
-        await update.message.reply_text("Usage: /field <amount>")
-        return
-
-    bet_type, message = _place_bet(user_data, 'field', context.args[0])
-
-    if bet_type:
-        message += " Bet resolves on next /roll."
-
-    await update.message.reply_text(message)
+    # Update display name in data when showing game info
+    if player_data.get('display_name') != user_name:
+        player_data['display_name'] = user_name
+        game_data_manager.save_player_data(channel_id, user_id, player_data)
 
 
-async def place_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles the /place command."""
-    user_data = context.user_data
-    if 'balance' not in user_data:
-        user_data['balance'] = '100'
-    game_state = user_data.get('craps_state', COME_OUT_PHASE)
+    balance = Decimal(player_data.get('balance', '100.00')) # Default if somehow missing after get
+    bets = player_data.get('craps_bets', {})
+    point = channel_data.get('craps_point', None)
+    state = channel_data.get('craps_state', COME_OUT_PHASE)
 
-    if game_state == COME_OUT_PHASE:
-        await update.message.reply_text("Cannot place Place Bets during Come Out roll. Wait for a point.")
-        return
-
-    valid_place_numbers = {4, 5, 6, 8, 9, 10}
-    if len(context.args) != 2:
-        await update.message.reply_text("Usage: /place <number> <amount> (e.g., /place 6 10)")
-        return
-
-    try:
-        number = int(context.args[0])
-        if number not in valid_place_numbers:
-            await update.message.reply_text(f"Invalid number for Place Bet. Choose from: {', '.join(map(str, sorted(valid_place_numbers)))}.")
-            return
-    except ValueError:
-        await update.message.reply_text("Invalid number. Usage: /place <number> <amount>")
-        return
-
-    bet_type_key = f"place_{number}"
-    bet_type, message = _place_bet(user_data, bet_type_key, context.args[1])
-
-    if bet_type:
-        message += " Bet is active. Use /roll."
-
-    await update.message.reply_text(message)
-
-
-async def resetbalance_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Resets the user's Craps balance and game state."""
-    user_data = context.user_data
-    start_balance = '100'  # Default starting balance
-    user_data['balance'] = start_balance
-    user_data['craps_bets'] = {}
-    user_data['craps_state'] = COME_OUT_PHASE
-    user_data.pop('craps_point', None)
-
-    await update.message.reply_text(f"Your balance has been reset to ${Decimal(start_balance):.2f}. All bets cleared. Good luck!")
-
-
-async def showbets_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Shows current Craps bets and balance."""
-    user_data = context.user_data
-    balance = Decimal(user_data.get('balance', '100'))  # Default to 100 if not set
-    bets = user_data.get('craps_bets', {})
-    point = user_data.get('craps_point', None)
-    state = user_data.get('craps_state', COME_OUT_PHASE)
-
-    reply_lines = [f"Current Balance: ${balance:.2f}"]
+    reply_lines = [f"--- Craps Game: Channel {channel_id} ---"]
     if point:
         reply_lines.append(f"Point is: {point}")
     else:
         reply_lines.append("Phase: Come Out Roll")
 
+    # Use the fetched/updated user_name
+    reply_lines.append(f"\n--- Your Status ({user_name}) ---")
+    reply_lines.append(f"Balance: ${balance:.2f}")
+
     if not bets:
-        reply_lines.append("No active bets.")
+        reply_lines.append("Your Active Bets: None")
     else:
-        reply_lines.append("Active Bets:")
+        reply_lines.append("Your Active Bets:")
         for bet_type, amount in bets.items():
-            reply_lines.append(f"- {bet_type.replace('_',' ').title()}: ${Decimal(amount):.2f}")
+            try:
+                amount_dec = Decimal(amount)
+                reply_lines.append(f"- {bet_type.replace('_',' ').title()}: ${amount_dec:.2f}")
+            except InvalidOperation:
+                 reply_lines.append(f"- {bet_type.replace('_',' ').title()}: Invalid Amount ({amount})") # Log error?
 
     await update.message.reply_text("\n".join(reply_lines))
 
-
 async def crapshelp_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Provides help text for Craps rules and commands using MarkdownV2 with minimal formatting."""
-    # Escaped special characters for MarkdownV2: _, *, [, ], (, ), ~, `, >, #, +, -, =, |, {, }, ., !
-    # Minimal formatting: Only main title bold, some italics, escaped chars.
     help_text = """
 🎲 **Craps Rules & Bot Commands** 🎲
 
 *Basic Gameplay:*
-The game starts with the "Come Out" roll\. The shooter \(you\!\) rolls the dice\.
-\- 7 or 11 \(Natural\): Pass Line bets win\.
-\- 2, 3, or 12 \(Craps\): Pass Line bets lose\.
-\- Any other number \(4, 5, 6, 8, 9, 10\): This number becomes the "Point"\.
-
-If a Point is established, the shooter keeps rolling until:
-\- The Point is rolled again: Pass Line bets win\.
-\- A 7 is rolled \("Seven Out"\): Pass Line bets lose\.
-
-A new Come Out roll begins after a win or loss on the Pass Line\.
+\.\.\. (Rules remain the same) \.\.\.
 
 *Bet Types Implemented:*
-
-\- Pass Line: \(`/passline <amount>`\)
-    \- Bet _with_ the shooter\.
-    \- Place only on Come Out roll\.
-    \- Wins on 7, 11 on Come Out\.
-    \- Loses on 2, 3, 12 on Come Out\.
-    \- Wins if Point is rolled before 7\.
-    \- Loses if 7 is rolled before Point\.
-    \- Pays 1:1\.
-
-\- Don't Pass: \(`/dontpass <amount>`\)
-    \- Bet _against_ the shooter\.
-    \- Place only on Come Out roll\.
-    \- Loses on 7, 11 on Come Out\.
-    \- Wins on 2, 3 on Come Out \(12 is a Push/Tie\)\.
-    \- Wins if 7 is rolled before Point\.
-    \- Loses if Point is rolled before 7\.
-    \- Pays 1:1\.
-
-\- Field: \(`/field <amount>`\)
-    \- One\-roll bet\.
-    \- Place anytime\.
-    \- Wins if next roll is 2, 3, 4, 9, 10, 11, or 12\.
-    \- Loses on 5, 6, 7, 8\.
-    \- Pays 1:1 on 3, 4, 9, 10, 11\.
-    \- Pays 2:1 on 2\.
-    \- Pays 3:1 on 12\.
-
-\- Place Bets: \(`/place <number> <amount>`\)
-    \- Bet that a specific number \(4, 5, 6, 8, 9, 10\) will be rolled _before_ a 7\.
-    \- Place only when a Point is established\.
-    \- Bets are typically "working" \(active\) unless it's a Come Out roll\.
-    \- Lose if a 7 is rolled\.
-    \- Payouts vary: 9:5 \(4, 10\), 7:5 \(5, 9\), 7:6 \(6, 8\)\.
+\- Pass Line \(pass\_line\)
+\- Don't Pass \(dont\_pass\)
+\- Field \(field\)
+\- Place Bets \(place\_4, place\_5, place\_6, place\_8, place\_9, place\_10\)
+\(See previous help or rules online for details on each bet\)
 
 *Bot Commands:*
 
-\- `/roll`: Roll the dice\. You must have an active bet\.
-\- `/passline <amount>`: Place a Pass Line bet \(Come Out roll only\)\.
-\- `/dontpass <amount>`: Place a Don't Pass bet \(Come Out roll only\)\.
-\- `/field <amount>`: Place a Field bet \(anytime\)\.
-\- `/place <num> <amount>`: Place a bet on number 4, 5, 6, 8, 9, or 10 \(Point phase only\)\.
-\- `/showbets`: Show your current balance and active bets\.
+\- `/roll`: Roll the dice for the channel\. You must have an active bet\.
+\- `/bet <type> <amount>`: Place a bet\. 
+    \- Examples:
+        \- `/bet pass_line 10`
+        \- `/bet field 5`
+        \- `/bet place_6 12` \(or `/bet place 6 12`\)
+    \- Valid types: `pass_line`, `dont_pass`, `field`, `place_4`, `place_5`, `place_6`, `place_8`, `place_9`, `place_10`\.
+    \- Note: `pass_line` and `dont_pass` only allowed on Come Out roll\. `place_*` bets only allowed when Point is established\.
+\- `/showgame`: Show channel game state and your balance/bets\.
+\- `/resetmygame`: Reset your balance to $100 and clear your bets in this channel\.
 \- `/crapshelp`: Show this help message\.
 
 \(More bet types may be added later\!\)
 """
-    # Using MarkdownV2 with minimal formatting
     await update.message.reply_text(help_text, parse_mode='MarkdownV2')
