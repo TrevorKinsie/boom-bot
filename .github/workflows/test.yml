@@ -22,8 +22,10 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        # Install NLTK data required by your bot
-        python -m nltk.downloader punkt wordnet averaged_perceptron_tagger
+        # Install NLTK data required by your bot and tests
+        python -m nltk.downloader punkt wordnet averaged_perceptron_tagger stopwords
 
     - name: Run pytest
+      env:
+        TELEGRAM_TOKEN: "test_token" # Set a dummy token for testing
       run: pytest
