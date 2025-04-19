@@ -222,14 +222,12 @@ async def test_handle_photo_caption_with_command_and_text(mock_process, mock_upd
 
 @pytest.mark.asyncio
 @patch('handlers._process_howmanybooms', new_callable=AsyncMock)
-@patch('handlers.random.choice', return_value="What about it?")
-async def test_handle_photo_caption_with_command_no_text(mock_random_choice, mock_process, mock_update, mock_context):
+async def test_handle_photo_caption_with_command_no_text(mock_process, mock_update, mock_context):
     mock_update.message.caption = "/howmanybooms   "
     mock_update.message.photo = [MagicMock(spec=PhotoSize)]
     await handle_photo_caption(mock_update, mock_context)
-    mock_process.assert_not_awaited()
-    mock_random_choice.assert_called_once_with(SASSY_REPLIES_WHAT)
-    mock_update.message.reply_text.assert_awaited_once_with("What about it?")
+    # Expect an empty string when no text follows the command
+    mock_process.assert_awaited_once_with(mock_update, "")
 
 @pytest.mark.asyncio
 @patch('handlers._process_howmanybooms', new_callable=AsyncMock)

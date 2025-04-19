@@ -102,13 +102,26 @@ async def _process_howmanybooms(update: Update, question_content: str) -> None:
         return
     # If incoming_words is empty but question_content was not, proceed to treat as new below
 
-    # Extract subject *after* finding potential match or deciding it's new
-    # Use original content for subject extraction if normalization failed but input existed
-    subject_base = question_content if not incoming_words else question_content  # Or adjust logic as needed
-    extracted_subject = extract_subject(subject_base)
+    # --- Subject Extraction Modification ---
+    # Preprocess question_content to remove leading "for " if present
+    processed_question_content = question_content.strip()
+    if processed_question_content.lower().startswith("for "):
+        processed_question_content = processed_question_content[4:].strip() # Remove "for " and trim whitespace
+
+    # Use the processed content for subject extraction
+    extracted_subject = extract_subject(processed_question_content)
+    # --- End Modification ---
 
     reply_text = ""  # Initialize reply_text
-    subject_to_use = extracted_subject  # Default to non-capitalized
+    subject_to_use = extracted_subject  # Default to extracted subject
+
+    # --- Handle Empty Subject ---
+    is_generic_subject = False
+    if not subject_to_use or subject_to_use.isspace():
+        subject_to_use = random.choice(["that", "it"])
+        is_generic_subject = True
+        logger.info(f"No specific subject found for '{question_content}', using generic '{subject_to_use}'.")
+    # --- End Handle Empty Subject ---
 
     if match_found and matched_question_key:
         # Found a sufficiently similar question
@@ -116,16 +129,18 @@ async def _process_howmanybooms(update: Update, question_content: str) -> None:
         count_str = p.no("BOOM", count)
         reply_format = random.choice(PREVIOUSLY_ANSWERED_QUESTION_REPLY_VARIATIONS)
 
-        # Capitalize subject only if the chosen reply format starts with it
-        if reply_format.startswith("{subject}"):
-            subject_to_use = extracted_subject.capitalize()
+        # Capitalize subject only if the chosen reply format starts with it AND it's not generic
+        subject_display = subject_to_use
+        if reply_format.startswith("{subject}") and not is_generic_subject:
+            subject_display = subject_to_use.capitalize()
 
         # Use the potentially capitalized subject and pluralized count string for the reply
-        reply_text = reply_format.format(count_str=count_str, subject=subject_to_use)
+        reply_text = reply_format.format(count_str=count_str, subject=subject_display)
         logger.info(f"Found similar question '{matched_question_key}' (Similarity: {highest_similarity:.2f}) for '{question_content}'. Answer: {count} booms")
 
     else:  # No similar question found OR normalization yielded nothing but input was present
         # No similar question found, treat as new
+        # Use the original, non-preprocessed question_content for the storage key
         storage_key = normalize_question_simple(question_content)
 
         if not storage_key:  # This check might be redundant now but kept for safety
@@ -143,12 +158,13 @@ async def _process_howmanybooms(update: Update, question_content: str) -> None:
         count_str = p.no("BOOM", question_boom_count)
         reply_format = random.choice(QUESTION_REPLY_VARIATIONS)
 
-        # Capitalize subject only if the chosen reply format starts with it
-        if reply_format.startswith("{subject}"):
-            subject_to_use = extracted_subject.capitalize()
+        # Capitalize subject only if the chosen reply format starts with it AND it's not generic
+        subject_display = subject_to_use
+        if reply_format.startswith("{subject}") and not is_generic_subject:
+            subject_display = subject_to_use.capitalize()
 
         # Use the potentially capitalized subject and pluralized count string for the reply
-        reply_text = reply_format.format(count_str=count_str, subject=subject_to_use)
+        reply_text = reply_format.format(count_str=count_str, subject=subject_display)
         data_manager.update_answer(storage_key, question_boom_count)  # Update answers dict
         data_manager.save_answers()  # Save updated answers
 
@@ -181,12 +197,11 @@ async def handle_photo_caption(update: Update, context: ContextTypes.DEFAULT_TYP
         question_content = caption[command_pos + len(command_name):].strip()
         logger.info(f"Processing question from photo caption: '{question_content}'")
 
-        if question_content:
-            await _process_howmanybooms(update, question_content)
-        else:
-            # Command was in caption, but no text followed it
-            reply = random.choice(SASSY_REPLIES_WHAT)
-            await update.message.reply_text(reply)
+        # --- Modification: Allow empty question content for photos ---
+        # Always call _process_howmanybooms, even if question_content is empty.
+        # _process_howmanybooms will handle the empty subject case.
+        await _process_howmanybooms(update, question_content)
+        # --- End Modification ---
 
 
 # --- Craps Inline Keyboard Setup ---
