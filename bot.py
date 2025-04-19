@@ -26,6 +26,10 @@ log_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(me
 logger = logging.getLogger() # Get root logger
 logger.setLevel(logging.INFO) # Set root logger level
 
+# Remove existing handlers from the root logger to prevent duplicates
+if logger.hasHandlers():
+    logger.handlers.clear()
+
 # Console Handler (INFO level)
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(log_formatter)
