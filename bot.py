@@ -17,6 +17,8 @@ from handlers import (
     craps_callback_handler,
     bet_command
 )
+# Add roulette handler imports
+from roulette_handlers import start_roulette_command, roulette_callback_handler
 from config import TELEGRAM_TOKEN # Corrected import name
 
 load_dotenv()  # Load environment variables from .env file
@@ -61,6 +63,10 @@ def create_application(token: str) -> Application:
     application.add_handler(CommandHandler("craps", start_craps_command))
     application.add_handler(CallbackQueryHandler(craps_callback_handler, pattern='^craps_')) # Pattern matches our callback data
     application.add_handler(CommandHandler("bet", bet_command))
+    
+    # --- Roulette Game Handlers ---
+    application.add_handler(CommandHandler("roulette", start_roulette_command))
+    application.add_handler(CallbackQueryHandler(roulette_callback_handler, pattern='^roulette_'))
 
     return application
 

@@ -192,6 +192,16 @@ class DataManager:
         # Return a copy to prevent direct modification of internal defaultdict
         return dict(self.data[channel_id_str]['players'])
 
+
+_data_manager = None
+
+def get_data_manager():
+    """Returns a singleton instance of the data manager."""
+    global _data_manager
+    if _data_manager is None:
+        _data_manager = DataManager()
+    return _data_manager
+
 # --- Initialization --- 
 # Load answers on startup
 load_answers()
