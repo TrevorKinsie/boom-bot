@@ -62,6 +62,8 @@ def test_create_application(mock_nltk_setup):
     assert command_handlers["start_craps_command"] == frozenset({"craps"})
     assert "bet_command" in command_handlers
     assert command_handlers["bet_command"] == frozenset({"bet"})
+    assert "start_roulette_command" in command_handlers # Added roulette command check
+    assert command_handlers["start_roulette_command"] == frozenset({"roulette"}) # Added roulette command check
 
     # Assert message handler (photo caption)
     assert len(message_handlers) == 1
@@ -70,11 +72,17 @@ def test_create_application(mock_nltk_setup):
     # Check the type of the filter using the identified class
     assert isinstance(message_handler.filters, filters._MergedFilter) # Use _MergedFilter
 
-    # Assert callback query handler (craps)
-    assert len(callback_handlers) == 1
-    # Compare the pattern string within the compiled regex object
-    assert callback_handlers[0].pattern.pattern == '^craps_'
-    assert callback_handlers[0].callback.__name__ == "craps_callback_handler"
+    # Assert callback query handlers
+    assert len(callback_handlers) == 2 # Updated count for craps + roulette
+    # Find handlers by pattern or callback name for robustness
+    craps_handler = next((h for h in callback_handlers if h.callback.__name__ == "craps_callback_handler"), None)
+    roulette_handler = next((h for h in callback_handlers if h.callback.__name__ == "roulette_callback_handler"), None)
+
+    assert craps_handler is not None
+    assert craps_handler.pattern.pattern == '^craps_'
+
+    assert roulette_handler is not None # Added roulette handler check
+    assert roulette_handler.pattern.pattern == '^roulette_' # Added roulette handler check
 
     # Check if NLTK setup was called
     mock_setup_func.assert_called_once()

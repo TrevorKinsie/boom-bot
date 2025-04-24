@@ -25,6 +25,9 @@ from nltk_utils import normalize_question_nltk, normalize_question_simple, extra
 # Import Craps game logic and constants
 from craps_game import play_craps_round, place_bet as place_craps_bet, COME_OUT_PHASE, POINT_PHASE
 
+# Import Roulette game logic and constants
+from roulette import place_bet, play_roulette_round, get_bet_help
+
 logger = logging.getLogger(__name__)
 p = engine()  # Initialize inflect engine
 
