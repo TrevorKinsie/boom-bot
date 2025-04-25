@@ -20,6 +20,7 @@ from handlers import (
 # Add roulette handler imports
 from roulette_handlers import start_roulette_command, roulette_callback_handler
 from config import TELEGRAM_TOKEN # Corrected import name
+from zeus import zeus, spin_button  # Import Zeus handlers
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -67,6 +68,11 @@ def create_application(token: str) -> Application:
     # --- Roulette Game Handlers ---
     application.add_handler(CommandHandler("roulette", start_roulette_command))
     application.add_handler(CallbackQueryHandler(roulette_callback_handler, pattern='^roulette_'))
+
+    application.add_handler(CommandHandler("zeus", zeus))  # Register /zeus command
+    application.add_handler(CallbackQueryHandler(spin_button, pattern='^spin$'))  # Register spin button callback
+
+
 
     return application
 

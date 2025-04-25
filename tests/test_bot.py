@@ -65,6 +65,14 @@ def test_create_application(mock_nltk_setup):
     assert "start_roulette_command" in command_handlers # Added roulette command check
     assert command_handlers["start_roulette_command"] == frozenset({"roulette"}) # Added roulette command check
 
+    # Assert Zeus handlers
+    assert "zeus" in command_handlers
+    assert command_handlers["zeus"] == frozenset({"zeus"})
+
+    spin_handler = next((h for h in callback_handlers if h.callback.__name__ == "spin_button"), None)
+    assert spin_handler is not None
+    assert spin_handler.pattern.pattern == '^spin$'
+
     # Assert message handler (photo caption)
     assert len(message_handlers) == 1
     message_handler = message_handlers[0]
