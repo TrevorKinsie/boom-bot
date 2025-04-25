@@ -1,5 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+from telegram import InlineKeyboardMarkup, InlineKeyboardButton  # Add this import
 from zeus import zeus, wallet, spin_button, wallets
 
 @pytest.fixture
