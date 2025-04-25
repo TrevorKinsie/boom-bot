@@ -81,16 +81,20 @@ def test_create_application(mock_nltk_setup):
     assert isinstance(message_handler.filters, filters._MergedFilter) # Use _MergedFilter
 
     # Assert callback query handlers
-    assert len(callback_handlers) == 2 # Updated count for craps + roulette
+    assert len(callback_handlers) == 3 # Updated count for craps + roulette + zeus
     # Find handlers by pattern or callback name for robustness
     craps_handler = next((h for h in callback_handlers if h.callback.__name__ == "craps_callback_handler"), None)
     roulette_handler = next((h for h in callback_handlers if h.callback.__name__ == "roulette_callback_handler"), None)
+    spin_handler = next((h for h in callback_handlers if h.callback.__name__ == "spin_button"), None) # Added zeus spin handler check
 
     assert craps_handler is not None
     assert craps_handler.pattern.pattern == '^craps_'
 
     assert roulette_handler is not None # Added roulette handler check
     assert roulette_handler.pattern.pattern == '^roulette_' # Added roulette handler check
+
+    assert spin_handler is not None # Added zeus spin handler check
+    assert spin_handler.pattern.pattern == '^spin$' # Added zeus spin handler check
 
     # Check if NLTK setup was called
     mock_setup_func.assert_called_once()
