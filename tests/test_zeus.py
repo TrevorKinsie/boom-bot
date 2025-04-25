@@ -20,13 +20,10 @@ def mock_update_context():
 
 @pytest.mark.asyncio
 async def test_zeus_command(mock_update_context):
-@pytest.mark.asyncio
-async def test_zeus_command(mock_update_context):
     """Test the /zeus command."""
     mock_update, mock_context = mock_update_context
 
     # Act
-    await zeus(mock_update, mock_context)
     await zeus(mock_update, mock_context)
 
     # Assert
@@ -51,10 +48,6 @@ async def test_zeus_command(mock_update_context):
     assert button.text == "🎰 Spin"
     assert button.callback_data == "spin"
 
-    # Check wallet initialization
-        "Use the button below to spin!",
-        reply_markup=ANY # Use ANY to match any reply_markup
-    )
     assert 12345 in wallets
     assert wallets[12345]['coins'] == 100
     assert wallets[12345]['free_spins'] == 0
