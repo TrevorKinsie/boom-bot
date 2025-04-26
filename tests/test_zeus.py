@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton
-from zeus import zeus, wallet, spin_button, wallets, spin_grid, count_lines
+from boombot.games.zeus.zeus import zeus, wallet, spin_button, wallets, spin_grid, count_lines
 
 @pytest.fixture
 def mock_update_context():
@@ -89,8 +89,8 @@ async def test_spin_button_with_coins(mock_update_context):
     
     matches = [('⚡', 5)]  # Adjust to match the real count_lines output style
 
-    with patch('zeus.spin_grid', return_value=winning_grid), \
-         patch('zeus.count_lines', return_value=matches):
+    with patch('boombot.games.zeus.zeus.spin_grid', return_value=winning_grid), \
+         patch('boombot.games.zeus.zeus.spin_grid', return_value=matches):
         await spin_button(mock_update, mock_context)
 
     mock_update.callback_query.edit_message_text.assert_called_once()
