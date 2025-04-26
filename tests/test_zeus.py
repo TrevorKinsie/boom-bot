@@ -86,7 +86,7 @@ async def test_spin_button_with_coins(mock_update_context):
     mock_update, mock_context = mock_update_context
     wallets[12345] = {'coins': 20, 'free_spins': 0}
 
-    # Mock spin_grid and count_lines
+    # Mock spin_grid and count_lines using emoji symbols
     with patch('zeus.spin_grid', return_value=[['⚡', '⚡', '⚡', '⚡', '⚡']] * 5), \
          patch('zeus.count_lines', return_value={'⚡': 5}):
         await spin_button(mock_update, mock_context)
