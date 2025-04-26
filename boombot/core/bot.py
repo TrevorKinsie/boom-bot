@@ -6,9 +6,9 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Mess
 import logging.handlers # Import handlers
 
 # Import setup functions and handlers
-from nltk_utils import setup_nltk
-from data_manager import load_answers
-from handlers import (
+from boombot.utils.nltk_utils import setup_nltk
+from boombot.core.data_manager import load_answers
+from boombot.handlers.base_handlers import (
     boom_command,
     booms_command,
     handle_photo_caption,
@@ -18,9 +18,9 @@ from handlers import (
     bet_command
 )
 # Add roulette handler imports
-from roulette_handlers import start_roulette_command, roulette_callback_handler
-from config import TELEGRAM_TOKEN # Corrected import name
-from zeus import zeus, spin_button  # Import Zeus handlers
+from boombot.handlers.roulette_handlers import start_roulette_command, roulette_callback_handler
+from boombot.core.config import TELEGRAM_TOKEN # Corrected import name
+from boombot.games.zeus.zeus import zeus, spin_button  # Import Zeus handlers
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -72,19 +72,16 @@ def create_application(token: str) -> Application:
     application.add_handler(CommandHandler("zeus", zeus))  # Register /zeus command
     application.add_handler(CallbackQueryHandler(spin_button, pattern='^spin$'))  # Register spin button callback
 
-
-
     return application
 
 # --- Main Bot Function ---
 def main() -> None:
     """Start the bot."""
-    # token = os.environ.get("TELEGRAM_BOT_TOKEN") # Get token from config instead
-    if not TELEGRAM_TOKEN: # Use corrected token name
+    if not TELEGRAM_TOKEN: 
         logger.error("TELEGRAM_TOKEN not set in config.py or environment.")
         return
 
-    application = create_application(TELEGRAM_TOKEN) # Use corrected token name
+    application = create_application(TELEGRAM_TOKEN)
 
     logger.info("Starting bot...")
     application.run_polling()

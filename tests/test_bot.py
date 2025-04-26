@@ -3,29 +3,21 @@ import pytest
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from unittest.mock import patch, MagicMock, AsyncMock
 
-# Assuming bot.py is in the parent directory
-import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from bot import create_application
+# Import from the new package structure
+from boombot.core.bot import create_application
 
 # Use a dummy token for testing
 TEST_TOKEN = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 
-# --- Mocks for Telegram Objects ---
-# Removed mocks as they are not needed for create_application test
-
 @pytest.fixture
 def mock_nltk_setup():
     """Fixture to mock NLTK setup functions."""
-    # Patch where the functions are looked up in the 'bot' module
-    with patch('bot.setup_nltk') as mock_setup, \
-         patch('bot.load_answers') as mock_load:
+    # Update the patch targets to use the new module paths
+    with patch('boombot.core.bot.setup_nltk') as mock_setup, \
+         patch('boombot.core.bot.load_answers') as mock_load:
         yield mock_setup, mock_load
 
 # --- Test Cases ---
-
-# Removed tests for boom_command, they will be moved to test_handlers.py
 
 def test_create_application(mock_nltk_setup):
     """Tests if the create_application function builds the app correctly."""
@@ -62,8 +54,8 @@ def test_create_application(mock_nltk_setup):
     assert command_handlers["start_craps_command"] == frozenset({"craps"})
     assert "bet_command" in command_handlers
     assert command_handlers["bet_command"] == frozenset({"bet"})
-    assert "start_roulette_command" in command_handlers # Added roulette command check
-    assert command_handlers["start_roulette_command"] == frozenset({"roulette"}) # Added roulette command check
+    assert "start_roulette_command" in command_handlers
+    assert command_handlers["start_roulette_command"] == frozenset({"roulette"})
 
     # Assert Zeus handlers
     assert "zeus" in command_handlers
@@ -78,23 +70,23 @@ def test_create_application(mock_nltk_setup):
     message_handler = message_handlers[0]
     assert message_handler.callback.__name__ == "handle_photo_caption"
     # Check the type of the filter using the identified class
-    assert isinstance(message_handler.filters, filters._MergedFilter) # Use _MergedFilter
+    assert isinstance(message_handler.filters, filters._MergedFilter)
 
     # Assert callback query handlers
-    assert len(callback_handlers) == 3 # Updated count for craps + roulette + zeus
+    assert len(callback_handlers) == 3
     # Find handlers by pattern or callback name for robustness
     craps_handler = next((h for h in callback_handlers if h.callback.__name__ == "craps_callback_handler"), None)
     roulette_handler = next((h for h in callback_handlers if h.callback.__name__ == "roulette_callback_handler"), None)
-    spin_handler = next((h for h in callback_handlers if h.callback.__name__ == "spin_button"), None) # Added zeus spin handler check
+    spin_handler = next((h for h in callback_handlers if h.callback.__name__ == "spin_button"), None)
 
     assert craps_handler is not None
     assert craps_handler.pattern.pattern == '^craps_'
 
-    assert roulette_handler is not None # Added roulette handler check
-    assert roulette_handler.pattern.pattern == '^roulette_' # Added roulette handler check
+    assert roulette_handler is not None
+    assert roulette_handler.pattern.pattern == '^roulette_'
 
-    assert spin_handler is not None # Added zeus spin handler check
-    assert spin_handler.pattern.pattern == '^spin$' # Added zeus spin handler check
+    assert spin_handler is not None
+    assert spin_handler.pattern.pattern == '^spin$'
 
     # Check if NLTK setup was called
     mock_setup_func.assert_called_once()

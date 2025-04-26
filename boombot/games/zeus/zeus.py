@@ -1,6 +1,10 @@
+import logging
 import random
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
+
+# Update import path for data_manager
+from boombot.core.data_manager import get_data_manager
 
 # 🎰 Symbol list (🧔‍♂️ = Zeus wild card)
 symbols = ['⚡', '🦁', '🏺', '🦅', '👑', '🍒', '🍊', '🍇', '🧔‍♂️']

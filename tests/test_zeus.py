@@ -1,9 +1,9 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from telegram import InlineKeyboardMarkup, InlineKeyboardButton  # Add this import
-from zeus import zeus, wallet, spin_button, wallets
-from unittest.mock import AsyncMock, MagicMock, patch, ANY # Import ANY
-from zeus import zeus, wallet, spin_button, wallets, spin_grid, count_lines
+from unittest.mock import AsyncMock, MagicMock, patch, ANY
+from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+
+# Update imports to use new package structure
+from boombot.games.zeus.zeus import zeus, wallet, spin_button, wallets, spin_grid, count_lines
 
 @pytest.fixture
 def mock_update_context():
@@ -87,8 +87,8 @@ async def test_spin_button_with_coins(mock_update_context):
     wallets[12345] = {'coins': 20, 'free_spins': 0}
 
     # Mock spin_grid and count_lines using emoji symbols
-    with patch('zeus.spin_grid', return_value=[['⚡', '⚡', '⚡', '⚡', '⚡']] * 5), \
-         patch('zeus.count_lines', return_value={'⚡': 5}):
+    with patch('boombot.games.zeus.zeus.spin_grid', return_value=[['⚡', '⚡', '⚡', '⚡', '⚡']] * 5), \
+         patch('boombot.games.zeus.zeus.count_lines', return_value={'⚡': 5}):
         await spin_button(mock_update, mock_context)
 
     # Assert

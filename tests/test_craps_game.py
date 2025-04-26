@@ -3,9 +3,11 @@ import pytest
 import random
 from unittest.mock import patch
 from decimal import Decimal
-from craps_game import roll_dice, _calculate_winnings, play_craps_round, place_bet
-from data_manager import DataManager
-import craps_game # Import the module itself to access game_state
+
+# Update imports to use new package structure
+from boombot.games.craps.craps_game import roll_dice, _calculate_winnings, play_craps_round, place_bet
+from boombot.core.data_manager import DataManager
+import boombot.games.craps.craps_game as craps_game
 
 # --- Test Rolling ---
 
@@ -20,12 +22,12 @@ def test_roll_dice(mock_randint):
 
 @pytest.mark.parametrize("bet_type, bet_amount, die1, die2, point, expected_winnings", [
     # Come out roll 7 (3+4), Pass Line wins 1:1
-    ('pass_line', Decimal('10'), 3, 4, None, Decimal('10')), # Corrected expected winnings from 0 to 10
+    ('pass_line', Decimal('10'), 3, 4, None, Decimal('10')),
     ('pass_line', Decimal('10'), 3, 4, 7, Decimal('10')),
     ('dont_pass', Decimal('10'), 1, 1, None, Decimal('10')),
     ('dont_pass', Decimal('10'), 3, 4, 7, Decimal('10')),
     # Roll 4 (2+2), Field bet wins 1:1
-    ('field', Decimal('10'), 2, 2, None, Decimal('10')), # Corrected expected winnings from 0 to 10
+    ('field', Decimal('10'), 2, 2, None, Decimal('10')),
     ('field', Decimal('10'), 1, 1, None, Decimal('20')),
     ('place_4', Decimal('10'), 2, 2, 4, Decimal('18')),
     ('hard_4', Decimal('10'), 2, 2, None, Decimal('70')),
@@ -42,7 +44,7 @@ def test_calculate_winnings(bet_type, bet_amount, die1, die2, point, expected_wi
 
 # --- Test Playing a Round ---
 
-@pytest.fixture(scope="function") # Ensure a new instance for each test function
+@pytest.fixture(scope="function")
 def data_manager():
     dm = DataManager()
     # Clear data before test run as well for extra safety
@@ -60,7 +62,7 @@ def test_play_craps_round_no_bets(data_manager):
     assert "No bets placed in the channel. Use /bet to place bets." in result
 
 # Use patch to control the dice roll for predictable outcome
-@patch('craps_game.roll_dice', return_value=(3, 2, 5)) # Force a roll of 5
+@patch('boombot.games.craps.craps_game.roll_dice', return_value=(3, 2, 5)) # Updated patch target
 def test_play_craps_round_with_bets(mock_roll, data_manager):
     channel_id = "test_channel_with_bets" # Use unique channel ID
     user_id = "test_user"
