@@ -9,86 +9,103 @@ from config import ANSWERS_FILE, GAME_DATA_FILE, BOOM_COUNT_FILE
 
 logger = logging.getLogger(__name__)
 
-# --- Boom Count Logic ---
-boom_count: int = 0
-
-def load_boom_count() -> int:
-    """Loads the boom count from its JSON file."""
-    global boom_count
-    if BOOM_COUNT_FILE.exists(): # Use the constant
-        try:
-            with open(BOOM_COUNT_FILE, 'r') as f: # Use the constant
-                data = json.load(f)
-                boom_count = data.get("boom_count", 0)
-        except (json.JSONDecodeError, IOError) as e:
-            logger.error(f"Error loading boom count file: {e}")
-            boom_count = 0
-    else:
-        boom_count = 0
-    return boom_count
-
-def save_boom_count():
-    """Saves the current boom count to its JSON file."""
-    global boom_count
-    try:
-        with open(BOOM_COUNT_FILE, 'w') as f: # Use the constant
-            json.dump({"boom_count": boom_count}, f)
-    except IOError as e:
-        logger.error(f"Error saving boom count file: {e}")
-
-# --- Existing Question/Answer Logic (kept separate for now) ---
-# Store only the count now {normalized_question: count}
-question_answers: dict[str, int] = {}
-
-def load_answers():
-    global question_answers
-    try:
-        if os.path.exists(ANSWERS_FILE):
-            with open(ANSWERS_FILE, 'r') as f:
-                question_answers = json.load(f)
-                # Return the loaded data, not None
-                return question_answers
-        else:
-            question_answers = {} # Ensure global is empty dict if file not found
-            return question_answers # Return empty dict
-    except (FileNotFoundError, json.JSONDecodeError) as e:
-        logger.error(f"Error loading or parsing answers file: {e}")
-        question_answers = {} # Reset global to empty dict on error
-        return question_answers # Return empty dict on error
-
-
-def save_answers():
-    """Saves the current question answers to the JSON file."""
-    global question_answers
-    try:
-        with open(ANSWERS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(question_answers, f, ensure_ascii=False, indent=4)
-    except IOError as e:
-        logger.error(f"Error saving answers file: {e}")
-
-def get_answers() -> dict[str, int]:
-    """Returns the current question answers dictionary."""
-    return question_answers
-
-def update_answer(key: str, value: int):
-    """Updates or adds an answer to the dictionary and saves.""" # Updated docstring
-    global question_answers
-    question_answers[key] = value
-    save_answers() # Call save_answers after updating
-
-# --- New DataManager Class for Game State ---
-
+# --- DataManager Class (Singleton) for all data ---
 class DataManager:
+    _instance = None
+    
+    def __new__(cls, data_file: Path = GAME_DATA_FILE):
+        if cls._instance is None:
+            cls._instance = super(DataManager, cls).__new__(cls)
+            cls._instance.data_file = data_file
+            # Structure: {channel_id: {'channel_state': {...}, 'players': {user_id: {...}}}}
+            cls._instance.data = cls._instance._load_data()
+            
+            # Initialize boom count and answers data
+            cls._instance.boom_count = 0
+            cls._instance.question_answers = {}
+            cls._instance.load_boom_count()
+            cls._instance.load_answers()
+        return cls._instance
+        
     def __init__(self, data_file: Path = GAME_DATA_FILE):
         """Initializes the DataManager.
 
         Args:
             data_file: The path to the JSON file used for storing game data.
         """
-        self.data_file = data_file
-        # Structure: {channel_id: {'channel_state': {...}, 'players': {user_id: {...}}}} 
-        self.data = self._load_data()
+        # The actual initialization happens in __new__
+        # This prevents re-initialization if the instance already exists
+        pass
+    
+    # --- Boom Count Methods ---
+    def load_boom_count(self) -> int:
+        """Loads the boom count from its JSON file."""
+        if BOOM_COUNT_FILE.exists():
+            try:
+                with open(BOOM_COUNT_FILE, 'r') as f:
+                    data = json.load(f)
+                    self.boom_count = data.get("boom_count", 0)
+            except (json.JSONDecodeError, IOError) as e:
+                logger.error(f"Error loading boom count file: {e}")
+                self.boom_count = 0
+        else:
+            self.boom_count = 0
+        return self.boom_count
+    
+    def save_boom_count(self):
+        """Saves the current boom count to its JSON file."""
+        try:
+            with open(BOOM_COUNT_FILE, 'w') as f:
+                json.dump({"boom_count": self.boom_count}, f)
+        except IOError as e:
+            logger.error(f"Error saving boom count file: {e}")
+    
+    def get_boom_count(self) -> int:
+        """Returns the current boom count."""
+        return self.boom_count
+    
+    def set_boom_count(self, count: int):
+        """Sets and saves the boom count."""
+        self.boom_count = count
+        self.save_boom_count()
+    
+    def increment_boom_count(self):
+        """Increments the boom count by 1 and saves it."""
+        self.boom_count += 1
+        self.save_boom_count()
+    
+    # --- Question/Answer Methods ---
+    def load_answers(self) -> dict[str, int]:
+        """Loads the answers from the JSON file."""
+        try:
+            if os.path.exists(ANSWERS_FILE):
+                with open(ANSWERS_FILE, 'r') as f:
+                    self.question_answers = json.load(f)
+            else:
+                self.question_answers = {}
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            logger.error(f"Error loading or parsing answers file: {e}")
+            self.question_answers = {}
+        return self.question_answers
+    
+    def save_answers(self):
+        """Saves the current question answers to the JSON file."""
+        try:
+            with open(ANSWERS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(self.question_answers, f, ensure_ascii=False, indent=4)
+        except IOError as e:
+            logger.error(f"Error saving answers file: {e}")
+    
+    def get_answers(self) -> dict[str, int]:
+        """Returns the current question answers dictionary."""
+        return self.question_answers
+    
+    def update_answer(self, key: str, value: int):
+        """Updates or adds an answer to the dictionary and saves."""
+        self.question_answers[key] = value
+        self.save_answers()
 
+    # --- Game Data Methods ---
     def _load_data(self) -> defaultdict:
         """Loads game data from the JSON file."""
         if self.data_file.exists():
@@ -149,7 +166,8 @@ class DataManager:
             # Initialize default player data (e.g., starting balance)
             player_data = {
                 'balance': '100.00', # Store as string for JSON compatibility
-                'craps_bets': {}
+                'craps_bets': {},
+                'roulette_bets': {}  # Add roulette bets structure
                 # Add other game-specific or general player data here
             }
             # No need to save here, will be saved when modified by save_player_data
@@ -158,6 +176,10 @@ class DataManager:
         # Ensure craps_bets exists and is a dict
         if 'craps_bets' not in player_data or not isinstance(player_data.get('craps_bets'), dict):
             player_data['craps_bets'] = {}
+            
+        # Ensure roulette_bets exists and is a dict
+        if 'roulette_bets' not in player_data or not isinstance(player_data.get('roulette_bets'), dict):
+            player_data['roulette_bets'] = {}
             
         return player_data
 
@@ -193,19 +215,40 @@ class DataManager:
         return dict(self.data[channel_id_str]['players'])
 
 
-_data_manager = None
+# --- Legacy/Compatibility Functions ---
+# These delegate to the singleton instance for backward compatibility
+
+def load_boom_count() -> int:
+    """Legacy function - delegates to DataManager singleton."""
+    return get_data_manager().load_boom_count()
+
+def save_boom_count():
+    """Legacy function - delegates to DataManager singleton."""
+    get_data_manager().save_boom_count()
+
+def get_boom_count() -> int:
+    """Legacy function - delegates to DataManager singleton."""
+    return get_data_manager().get_boom_count()
+
+def load_answers() -> dict[str, int]:
+    """Legacy function - delegates to DataManager singleton."""
+    return get_data_manager().load_answers()
+
+def save_answers():
+    """Legacy function - delegates to DataManager singleton."""
+    get_data_manager().save_answers()
+
+def get_answers() -> dict[str, int]:
+    """Legacy function - delegates to DataManager singleton."""
+    return get_data_manager().get_answers()
+
+def update_answer(key: str, value: int):
+    """Legacy function - delegates to DataManager singleton."""
+    get_data_manager().update_answer(key, value)
 
 def get_data_manager():
     """Returns a singleton instance of the data manager."""
-    global _data_manager
-    if _data_manager is None:
-        _data_manager = DataManager()
-    return _data_manager
+    return DataManager()
 
-# --- Initialization --- 
-# Load answers on startup
-load_answers()
-
-# Create a global instance of DataManager if needed by handlers
-# Or instantiate it where needed (e.g., in bot.py)
-# game_data_manager = DataManager()
+# Initialize the singleton on module import
+_data_manager = get_data_manager()
