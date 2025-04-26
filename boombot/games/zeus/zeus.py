@@ -8,7 +8,7 @@ wallets = {}
 
 # Spin a 5x5 grid
 def spin_grid():
-    return [[random.choice(symbols) for _ in range(5)] for _ in range(5)]
+    return [[str(random.choice(symbols)) for _ in range(5)] for _ in range(5)]
 
 # Format grid
 def format_grid(grid):
