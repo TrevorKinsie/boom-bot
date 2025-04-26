@@ -90,7 +90,7 @@ async def test_spin_button_with_coins(mock_update_context):
     matches = [('⚡', 5)]  # Adjust to match the real count_lines output style
 
     with patch('boombot.games.zeus.zeus.spin_grid', return_value=winning_grid), \
-         patch('boombot.games.zeus.zeus.spin_grid', return_value=matches):
+         patch('boombot.games.zeus.zeus.count_lines', return_value=matches):
         await spin_button(mock_update, mock_context)
 
     mock_update.callback_query.edit_message_text.assert_called_once()
