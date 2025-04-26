@@ -65,7 +65,7 @@ def count_lines(grid):
     return matches
 
 # /start command
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def zeus(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     initialize_user(user_id)
     await update.message.reply_text(
