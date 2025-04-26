@@ -1,6 +1,6 @@
 # Boom Bot
 
-A Telegram bot that provides boom counts and plays Craps.
+A Telegram bot that provides boom counts and plays Craps and does a couple other things...
 
 ## Features
 
