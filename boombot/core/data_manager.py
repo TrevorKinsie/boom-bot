@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 class DataManager:
     _instance = None
     
-    def __new__(cls, data_file: Path = GAME_DATA_FILE):
-        if cls._instance is None:
+    def __new__(cls, data_file: Path = GAME_DATA_FILE, reset_instance: bool = False):
+        if cls._instance is None or reset_instance:
             cls._instance = super(DataManager, cls).__new__(cls)
             cls._instance.data_file = data_file
             # Structure: {channel_id: {'channel_state': {...}, 'players': {user_id: {...}}}}
@@ -26,15 +26,21 @@ class DataManager:
             cls._instance.load_answers()
         return cls._instance
         
-    def __init__(self, data_file: Path = GAME_DATA_FILE):
+    def __init__(self, data_file: Path = GAME_DATA_FILE, reset_instance: bool = False):
         """Initializes the DataManager.
 
         Args:
             data_file: The path to the JSON file used for storing game data.
+            reset_instance: If True, forces creation of a new instance (for testing).
         """
         # The actual initialization happens in __new__
         # This prevents re-initialization if the instance already exists
         pass
+
+    @classmethod
+    def reset_instance(cls):
+        """Resets the singleton instance (for testing)."""
+        cls._instance = None
     
     # --- Boom Count Methods ---
     def load_boom_count(self) -> int:
@@ -54,6 +60,8 @@ class DataManager:
     def save_boom_count(self):
         """Saves the current boom count to its JSON file."""
         try:
+            # Ensure parent directory exists
+            BOOM_COUNT_FILE.parent.mkdir(parents=True, exist_ok=True)
             with open(BOOM_COUNT_FILE, 'w') as f:
                 json.dump({"boom_count": self.boom_count}, f)
         except IOError as e:
@@ -90,6 +98,8 @@ class DataManager:
     def save_answers(self):
         """Saves the current question answers to the JSON file."""
         try:
+            # Ensure parent directory exists
+            ANSWERS_FILE.parent.mkdir(parents=True, exist_ok=True)
             with open(ANSWERS_FILE, 'w', encoding='utf-8') as f:
                 json.dump(self.question_answers, f, ensure_ascii=False, indent=4)
         except IOError as e:
@@ -110,12 +120,23 @@ class DataManager:
         if self.data_file.exists():
             try:
                 with open(self.data_file, 'r', encoding='utf-8') as f:
+                    content = f.read().strip()
+                    if not content:  # Handle empty file case
+                        return defaultdict(lambda: {'channel_state': {}, 'players': defaultdict(dict)})
+                    
                     # Use defaultdict for easier handling of new channels/players
-                    loaded = json.load(f)
-                    # Convert numeric strings back to Decimal where appropriate (e.g., balance, bets)
-                    # This needs careful handling based on actual data structure
-                    # For now, load as is, conversion happens in getter/setter logic
-                    return defaultdict(lambda: {'channel_state': {}, 'players': defaultdict(dict)}, loaded)
+                    loaded = json.loads(content)
+                    # If loaded data is empty, return an empty defaultdict
+                    if not loaded:
+                        return defaultdict(lambda: {'channel_state': {}, 'players': defaultdict(dict)})
+                    
+                    # Convert to defaultdict structure
+                    result = defaultdict(lambda: {'channel_state': {}, 'players': defaultdict(dict)})
+                    for channel_id, channel_data in loaded.items():
+                        result[channel_id]['channel_state'] = channel_data.get('channel_state', {})
+                        if 'players' in channel_data:
+                            result[channel_id]['players'] = defaultdict(dict, channel_data['players'])
+                    return result
             except (json.JSONDecodeError, IOError) as e:
                 logger.error(f"Error loading game data file {self.data_file}: {e}")
                 # Return a default structure if loading fails
@@ -245,9 +266,15 @@ def update_answer(key: str, value: int):
     """Legacy function - delegates to DataManager singleton."""
     get_data_manager().update_answer(key, value)
 
-def get_data_manager():
-    """Returns a singleton instance of the data manager."""
-    return DataManager()
+def get_data_manager(reset=False):
+    """Returns a singleton instance of the data manager.
+    
+    Args:
+        reset: If True, forces creation of a new instance (for testing).
+    """
+    if reset:
+        DataManager.reset_instance()
+    return DataManager(reset_instance=reset)
 
 # Initialize the singleton on module import
 _data_manager = get_data_manager()

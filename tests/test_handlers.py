@@ -5,25 +5,19 @@ from unittest.mock import AsyncMock, MagicMock, patch, call
 from telegram import Update, User, Message, Chat, PhotoSize, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes, CallbackQueryHandler
 
-# Add parent directory to sys.path
-import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from data_manager import DataManager  # Import DataManager
-
-# Import functions and constants to test from handlers.py
-from handlers import (
+# Import from the new package structure
+from boombot.core.data_manager import DataManager
+from boombot.handlers.base_handlers import (
     boom_command,
-    _process_howmanybooms,  # Test the internal logic directly
-    booms_command,  # Keep this for basic test
+    _process_howmanybooms,
+    booms_command,
     handle_photo_caption,
     start_craps_command,
     craps_callback_handler,
     bet_command,
-    game_data_manager,  # Import the instance to mock its methods
-    get_craps_keyboard,  # Import helper if needed for assertions
-    get_bet_amount_keyboard,  # Import helper
+    game_data_manager,
+    get_craps_keyboard,
+    get_bet_amount_keyboard,
     CALLBACK_ROLL, CALLBACK_SHOW, CALLBACK_RESET, CALLBACK_HELP,
     CALLBACK_BET_PASS, CALLBACK_BET_FIELD, CALLBACK_BET_PLACE_PROMPT,
     CALLBACK_PLACE_BET_PREFIX, CALLBACK_BACK_TO_MAIN,
@@ -90,7 +84,7 @@ def mock_callback_query(mock_update):  # Depends on mock_update
 # --- Tests for boom_command ---
 
 @pytest.mark.asyncio
-@patch('handlers.random.randint', return_value=3)
+@patch('boombot.handlers.base_handlers.random.randint', return_value=3)
 async def test_boom_no_args_sends_random_booms(mock_randint, mock_update, mock_context):
     await boom_command(mock_update, mock_context)
     mock_randint.assert_called_once_with(1, 5)
@@ -105,7 +99,7 @@ async def test_boom_valid_args_sends_specific_booms(num_booms, mock_update, mock
     mock_update.message.reply_text.assert_awaited_once_with(expected_booms)
 
 @pytest.mark.asyncio
-@patch('handlers.random.choice', return_value="Test Sassy High")
+@patch('boombot.handlers.base_handlers.random.choice', return_value="Test Sassy High")
 async def test_boom_high_args_sends_sassy_reply(mock_choice, mock_update, mock_context):
     mock_context.args = ["7"]
     await boom_command(mock_update, mock_context)
@@ -113,7 +107,7 @@ async def test_boom_high_args_sends_sassy_reply(mock_choice, mock_update, mock_c
     mock_update.message.reply_text.assert_awaited_once_with("Test Sassy High")
 
 @pytest.mark.asyncio
-@patch('handlers.random.choice', return_value="Test Sassy Low")
+@patch('boombot.handlers.base_handlers.random.choice', return_value="Test Sassy Low")
 async def test_boom_low_args_sends_sassy_reply(mock_choice, mock_update, mock_context):
     mock_context.args = ["0"]
     await boom_command(mock_update, mock_context)
@@ -121,7 +115,7 @@ async def test_boom_low_args_sends_sassy_reply(mock_choice, mock_update, mock_co
     mock_update.message.reply_text.assert_awaited_once_with("Test Sassy Low")
 
 @pytest.mark.asyncio
-@patch('handlers.random.choice', return_value="Test Sassy Invalid")
+@patch('boombot.handlers.base_handlers.random.choice', return_value="Test Sassy Invalid")
 async def test_boom_invalid_args_sends_sassy_reply(mock_choice, mock_update, mock_context):
     mock_context.args = ["hello"]
     await boom_command(mock_update, mock_context)
@@ -131,11 +125,11 @@ async def test_boom_invalid_args_sends_sassy_reply(mock_choice, mock_update, moc
 # --- Tests for _process_howmanybooms (internal logic) ---
 
 @pytest.mark.asyncio
-@patch('handlers.data_manager.get_answers')
-@patch('handlers.normalize_question_nltk')
-@patch('handlers.extract_subject', return_value="subject")
-@patch('handlers.random.choice', return_value="{subject} got {count_str}")
-@patch('handlers.p.no', return_value="5 BOOMS")
+@patch('boombot.handlers.base_handlers.data_manager.get_answers')
+@patch('boombot.handlers.base_handlers.normalize_question_nltk')
+@patch('boombot.handlers.base_handlers.extract_subject', return_value="subject")
+@patch('boombot.handlers.base_handlers.random.choice', return_value="{subject} got {count_str}")
+@patch('boombot.handlers.base_handlers.p.no', return_value="5 BOOMS")
 async def test_process_howmanybooms_found_match(mock_p_no, mock_random_choice, mock_extract_subject, mock_normalize_nltk, mock_get_answers, mock_update):
     question = "how many booms for this thing"
     normalized_question_words = {"how", "mani", "boom", "thing"}
@@ -156,15 +150,15 @@ async def test_process_howmanybooms_found_match(mock_p_no, mock_random_choice, m
     mock_update.message.reply_text.assert_awaited_once_with("Subject got 5 BOOMS")
 
 @pytest.mark.asyncio
-@patch('handlers.data_manager.get_answers', return_value={})  # No existing answers
-@patch('handlers.data_manager.update_answer')
-@patch('handlers.data_manager.save_answers')
-@patch('handlers.normalize_question_nltk', return_value={"new", "quest"})
-@patch('handlers.normalize_question_simple', return_value="new question simple")
-@patch('handlers.extract_subject', return_value="new subject")
-@patch('handlers.random.randint', return_value=3)
-@patch('handlers.random.choice', return_value="About {subject}, I'd say {count_str}")
-@patch('handlers.p.no', return_value="3 BOOMS")
+@patch('boombot.handlers.base_handlers.data_manager.get_answers', return_value={})  # No existing answers
+@patch('boombot.handlers.base_handlers.data_manager.update_answer')
+@patch('boombot.handlers.base_handlers.data_manager.save_answers')
+@patch('boombot.handlers.base_handlers.normalize_question_nltk', return_value={"new", "quest"})
+@patch('boombot.handlers.base_handlers.normalize_question_simple', return_value="new question simple")
+@patch('boombot.handlers.base_handlers.extract_subject', return_value="new subject")
+@patch('boombot.handlers.base_handlers.random.randint', return_value=3)
+@patch('boombot.handlers.base_handlers.random.choice', return_value="About {subject}, I'd say {count_str}")
+@patch('boombot.handlers.base_handlers.p.no', return_value="3 BOOMS")
 async def test_process_howmanybooms_new_question(mock_p_no, mock_random_choice, mock_randint, mock_extract_subject, mock_normalize_simple, mock_normalize_nltk, mock_save_answers, mock_update_answer, mock_get_answers, mock_update):
     question = "what about a new question"
     normalized_words = {"new", "quest"}
@@ -185,7 +179,7 @@ async def test_process_howmanybooms_new_question(mock_p_no, mock_random_choice, 
     mock_update.message.reply_text.assert_awaited_once_with("About new subject, I'd say 3 BOOMS")
 
 @pytest.mark.asyncio
-@patch('handlers.random.choice', return_value="What?")
+@patch('boombot.handlers.base_handlers.random.choice', return_value="What?")
 async def test_process_howmanybooms_empty_question(mock_random_choice, mock_update):
     await _process_howmanybooms(mock_update, "   ")  # Whitespace only
     mock_random_choice.assert_called_once_with(SASSY_REPLIES_WHAT)
@@ -194,15 +188,15 @@ async def test_process_howmanybooms_empty_question(mock_random_choice, mock_upda
 # --- Tests for booms_command (simple wrapper) ---
 
 @pytest.mark.asyncio
-@patch('handlers._process_howmanybooms', new_callable=AsyncMock)
+@patch('boombot.handlers.base_handlers._process_howmanybooms', new_callable=AsyncMock)
 async def test_booms_command_with_args(mock_process, mock_update, mock_context):
     mock_context.args = ["some", "question"]
     await booms_command(mock_update, mock_context)
     mock_process.assert_awaited_once_with(mock_update, "some question")
 
 @pytest.mark.asyncio
-@patch('handlers._process_howmanybooms', new_callable=AsyncMock)
-@patch('handlers.random.choice', return_value="What?")
+@patch('boombot.handlers.base_handlers._process_howmanybooms', new_callable=AsyncMock)
+@patch('boombot.handlers.base_handlers.random.choice', return_value="What?")
 async def test_booms_command_no_args(mock_random_choice, mock_process, mock_update, mock_context):
     mock_context.args = []
     await booms_command(mock_update, mock_context)
@@ -213,7 +207,7 @@ async def test_booms_command_no_args(mock_random_choice, mock_process, mock_upda
 # --- Tests for handle_photo_caption ---
 
 @pytest.mark.asyncio
-@patch('handlers._process_howmanybooms', new_callable=AsyncMock)
+@patch('boombot.handlers.base_handlers._process_howmanybooms', new_callable=AsyncMock)
 async def test_handle_photo_caption_with_command_and_text(mock_process, mock_update, mock_context):
     mock_update.message.caption = "Some text /howmanybooms for the photo?"
     mock_update.message.photo = [MagicMock(spec=PhotoSize)]
@@ -221,7 +215,7 @@ async def test_handle_photo_caption_with_command_and_text(mock_process, mock_upd
     mock_process.assert_awaited_once_with(mock_update, "for the photo?")
 
 @pytest.mark.asyncio
-@patch('handlers._process_howmanybooms', new_callable=AsyncMock)
+@patch('boombot.handlers.base_handlers._process_howmanybooms', new_callable=AsyncMock)
 async def test_handle_photo_caption_with_command_no_text(mock_process, mock_update, mock_context):
     mock_update.message.caption = "/howmanybooms   "
     mock_update.message.photo = [MagicMock(spec=PhotoSize)]
@@ -230,7 +224,7 @@ async def test_handle_photo_caption_with_command_no_text(mock_process, mock_upda
     mock_process.assert_awaited_once_with(mock_update, "")
 
 @pytest.mark.asyncio
-@patch('handlers._process_howmanybooms', new_callable=AsyncMock)
+@patch('boombot.handlers.base_handlers._process_howmanybooms', new_callable=AsyncMock)
 async def test_handle_photo_caption_no_command(mock_process, mock_update, mock_context):
     mock_update.message.caption = "Just a photo caption"
     mock_update.message.photo = [MagicMock(spec=PhotoSize)]
@@ -243,7 +237,7 @@ async def test_handle_photo_caption_no_command(mock_process, mock_update, mock_c
 @pytest.fixture(autouse=True)
 def mock_game_data_manager():
     # Use the imported DataManager for the spec
-    with patch('handlers.game_data_manager', spec=DataManager) as mock_manager:
+    with patch('boombot.handlers.base_handlers.game_data_manager', spec=DataManager) as mock_manager:
         mock_manager.get_channel_data.return_value = {'craps_state': 1, 'craps_point': None}
         mock_manager.get_player_data.return_value = {'balance': '100.00', 'craps_bets': {}}
         mock_manager.get_players_with_bets.return_value = {}
@@ -252,14 +246,14 @@ def mock_game_data_manager():
 
 @pytest.fixture
 def mock_play_craps_round():
-    with patch('handlers.play_craps_round', new_callable=AsyncMock) as mock_func:
+    with patch('boombot.handlers.base_handlers.play_craps_round', new_callable=AsyncMock) as mock_func:
         mock_func.return_value = "🎲 Rolled 5 + 2 = 7. Point is None. Player 67890 wins $10 on Pass Line."
         yield mock_func
 
 @pytest.fixture
 def mock_place_craps_bet():
     # Use regular patch for synchronous function
-    with patch('handlers.place_craps_bet') as mock_func:
+    with patch('boombot.handlers.base_handlers.place_craps_bet') as mock_func:
         mock_func.return_value = "TestUser placed $10.00 on Pass Line. New balance: $90.00"
         yield mock_func
 
@@ -304,7 +298,7 @@ async def test_craps_callback_roll(mock_play_craps_round, mock_game_data_manager
     roll_result_str = "🎲 Rolled 3 + 4 = 7. Seven Out!"
     mock_play_craps_round.return_value = roll_result_str
 
-    with patch('handlers._handle_craps_roll', new_callable=AsyncMock) as mock_internal_roll:
+    with patch('boombot.handlers.base_handlers._handle_craps_roll', new_callable=AsyncMock) as mock_internal_roll:
         mock_internal_roll.return_value = (f"{roll_result_str}\n\n---\n{user_name}, what's next?", get_craps_keyboard(channel_id))
 
         await craps_callback_handler(mock_update, mock_context)
@@ -320,7 +314,7 @@ async def test_craps_callback_roll(mock_play_craps_round, mock_game_data_manager
         mock_play_craps_round.assert_not_called()
 
 @pytest.mark.asyncio
-@patch('handlers.get_showgame_text', new_callable=AsyncMock, return_value="Current Game Status...")
+@patch('boombot.handlers.base_handlers.get_showgame_text', new_callable=AsyncMock, return_value="Current Game Status...")
 async def test_craps_callback_show(mock_get_showgame, mock_game_data_manager, mock_update, mock_context, mock_callback_query):
     channel_id = str(mock_callback_query.message.chat.id)
     user_id = str(mock_callback_query.from_user.id)
@@ -342,7 +336,7 @@ async def test_craps_callback_show(mock_get_showgame, mock_game_data_manager, mo
     )
 
 @pytest.mark.asyncio
-@patch('handlers.do_resetmygame', new_callable=AsyncMock, return_value="Your game data reset.")
+@patch('boombot.handlers.base_handlers.do_resetmygame', new_callable=AsyncMock, return_value="Your game data reset.")
 async def test_craps_callback_reset(mock_do_reset, mock_game_data_manager, mock_update, mock_context, mock_callback_query):
     channel_id = str(mock_callback_query.message.chat.id)
     user_id = str(mock_callback_query.from_user.id)
@@ -420,7 +414,7 @@ async def test_craps_callback_place_bet_button(mock_place_craps_bet, mock_game_d
     place_bet_result = f"{user_name} placed ${Decimal(amount):.2f} on Pass Line."
     mock_place_craps_bet.return_value = place_bet_result
 
-    with patch('handlers._handle_craps_place_bet', new_callable=AsyncMock) as mock_internal_place:
+    with patch('boombot.handlers.base_handlers._handle_craps_place_bet', new_callable=AsyncMock) as mock_internal_place:
         mock_internal_place.return_value = (f"{place_bet_result}\n\n---\n{user_name}, what's next?", get_craps_keyboard(channel_id))
 
         await craps_callback_handler(mock_update, mock_context)
