@@ -31,7 +31,10 @@ jobs:
       run: pytest
 
     - name: Set up flyctl
-      uses: superfly/flyctl-actions/setup-flyctl@v1.5
+      uses: superfly/flyctl-actions/setup-flyctl@master
+      with:
+        version: 0.3.110
+
 
     - name: Run deployability check
       env:
