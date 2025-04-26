@@ -4,8 +4,7 @@ import os
 from pathlib import Path
 from decimal import Decimal
 from collections import defaultdict
-# Import BOOM_COUNT_FILE from config
-from config import ANSWERS_FILE, GAME_DATA_FILE, BOOM_COUNT_FILE
+from boombot.core.config import ANSWERS_FILE, GAME_DATA_FILE, BOOM_COUNT_FILE
 
 logger = logging.getLogger(__name__)
 

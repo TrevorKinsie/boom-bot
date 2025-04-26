@@ -5,8 +5,8 @@ from inflect import engine
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from telegram.ext import ContextTypes, CallbackQueryHandler
 
-# Import replies
-from replies import (
+# Import replies with updated path
+from boombot.utils.replies import (
     SASSY_REPLIES_HIGH,
     SASSY_REPLIES_LOW,
     SASSY_REPLIES_INVALID,
@@ -15,18 +15,18 @@ from replies import (
     SASSY_REPLIES_WHAT
 )
 
-# Import data management functions and class
-import data_manager
-from data_manager import DataManager
+# Import data management functions with updated path
+from boombot.core.data_manager import DataManager
+import boombot.core.data_manager as data_manager
 
-# Import NLTK utility functions
-from nltk_utils import normalize_question_nltk, normalize_question_simple, extract_subject
+# Import NLTK utility functions with updated path
+from boombot.utils.nltk_utils import normalize_question_nltk, normalize_question_simple, extract_subject
 
-# Import Craps game logic and constants
-from craps_game import play_craps_round, place_bet as place_craps_bet, COME_OUT_PHASE, POINT_PHASE
+# Import Craps game logic with updated path
+from boombot.games.craps.craps_game import play_craps_round, place_bet as place_craps_bet, COME_OUT_PHASE, POINT_PHASE
 
-# Import Roulette game logic and constants
-from roulette import place_bet, play_roulette_round, get_bet_help
+# Import Roulette game logic with updated path
+from boombot.games.roulette.roulette import place_bet, play_roulette_round, get_bet_help
 
 logger = logging.getLogger(__name__)
 p = engine()  # Initialize inflect engine

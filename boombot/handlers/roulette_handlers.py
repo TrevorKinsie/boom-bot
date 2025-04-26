@@ -1,8 +1,11 @@
 import logging
-from decimal import Decimal
-from telegram import Update, InlineKeyboardMarkup
+import random
+from decimal import Decimal, InvalidOperation
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from telegram.ext import ContextTypes
-from roulette import (
+
+# Import with updated paths
+from boombot.games.roulette.roulette import (
     get_roulette_main_keyboard, get_bet_type_keyboard, get_number_selection_keyboard,
     get_bet_amount_keyboard, get_roulette_status, reset_player_roulette,
     get_roulette_help_text, place_bet, play_roulette_round,
@@ -10,7 +13,7 @@ from roulette import (
     CALLBACK_BET_MENU, CALLBACK_BACK_TO_MAIN, CALLBACK_BET_TYPE_PREFIX,
     CALLBACK_BET_NUMBER_PREFIX, CALLBACK_BET_AMOUNT_PREFIX
 )
-from data_manager import get_data_manager
+from boombot.core.data_manager import get_data_manager
 
 # Initialize logger
 logger = logging.getLogger(__name__)

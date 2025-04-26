@@ -3,3 +3,31 @@ __pycache__/
 question_answers.json
 game_data.json
 logs/error.log
+*.egg-info/
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Distribution / packaging
+dist/
+build/
+*.py[cod]
+*$py.class
+
+# Unit test / coverage reports
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# IDE specific files
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# OS specific files
+.DS_Store
+Thumbs.db

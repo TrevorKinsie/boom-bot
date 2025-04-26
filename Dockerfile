@@ -17,11 +17,14 @@ RUN python -m nltk.downloader punkt wordnet averaged_perceptron_tagger stopwords
 # Copy the rest of the application code into the container at /app
 COPY . .
 
+# Install the package in development mode
+RUN pip install -e .
+
 # Make port 8080 available to the world outside this container (if needed for health checks, though Telegram bots usually poll)
 # EXPOSE 8080 # Fly.io might require an exposed port for health checks, uncomment if needed.
 
 # Define environment variable (optional, can be set via Fly secrets)
 # ENV TELEGRAM_BOT_TOKEN=your_token_here
 
-# Run bot.py when the container launches
-CMD ["python", "bot.py"]
+# Run the bot using the new entry point
+CMD ["python", "main.py"]

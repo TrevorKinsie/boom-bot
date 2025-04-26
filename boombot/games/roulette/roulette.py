@@ -8,6 +8,9 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 # Initialize logger
 logger = logging.getLogger(__name__)
 
+# --- Import the data manager with updated path ---
+from boombot.core.data_manager import DataManager
+
 # --- Constants ---
 
 # Roulette wheel numbers - Standard: 0, 00, 1-36
@@ -163,9 +166,8 @@ def place_bet(channel_id: str, user_id: str, user_name: str, bet_type: str, bet_
 
 def play_roulette_round(channel_id: str, data_manager) -> str:
     """Spins the roulette wheel and processes all bets, returns MarkdownV2 formatted message."""
-    # Get the channel data with all players
-    channel_data = data_manager.get_channel_data(channel_id)
-    players_data = channel_data.get('players', {})
+    # Get players with roulette bets
+    players_with_bets = data_manager.get_players_with_bets(channel_id, 'roulette')
     
     # Spin the wheel (get a random number)
     result = random.choice(WHEEL_NUMBERS)
@@ -191,7 +193,7 @@ def play_roulette_round(channel_id: str, data_manager) -> str:
     # Process each player's bets
     winners = []
     
-    for user_id, player_data in players_data.items():
+    for user_id, player_data in players_with_bets.items():
         if 'roulette_bets' not in player_data or not player_data['roulette_bets']:
             continue
             

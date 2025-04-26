@@ -3,11 +3,32 @@ import pytest
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from unittest.mock import patch, MagicMock, AsyncMock
 
-# Assuming bot.py is in the parent directory
+# More robust import strategy
 import sys
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from bot import create_application
+
+def find_project_root():
+    """Find the project root by looking for marker files like requirements.txt or .git"""
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    while True:
+        # Check for common project root markers
+        for marker in ['requirements.txt', 'pyproject.toml', 'setup.py', '.git']:
+            if os.path.exists(os.path.join(current_dir, marker)):
+                return current_dir
+        
+        # Move up one directory
+        parent_dir = os.path.dirname(current_dir)
+        if parent_dir == current_dir:  # We've reached the filesystem root
+            raise FileNotFoundError("Could not find project root")
+        current_dir = parent_dir
+
+# Add project root to path
+project_root = find_project_root()
+sys.path.insert(0, project_root)
+
+# Updated import to use bot.py from the classes folder
+from classes.bot import create_application
 
 # Use a dummy token for testing
 TEST_TOKEN = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"

@@ -1,5 +1,10 @@
+import logging
 import random
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation
+from typing import Dict, List, Optional, Tuple, Union
+
+# Update the import path for data_manager
+from boombot.core.data_manager import DataManager
 
 # Game states
 COME_OUT_PHASE = 1
