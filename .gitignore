@@ -1,33 +1,83 @@
-.env
+# Kubernetes secrets
+secret.yaml
+
+# Python cache
 __pycache__/
-question_answers.json
-game_data.json
-logs/error.log
-*.egg-info/
-
-# Virtual environment
-venv/
-env/
-.venv/
-
-# Distribution / packaging
-dist/
-build/
 *.py[cod]
 *$py.class
 
-# Unit test / coverage reports
-.coverage
-htmlcov/
-.pytest_cache/
-.tox/
+# Environment directories
+.env
+.venv
+env/
+venv/
+ENV/
+VENV/
 
-# IDE specific files
-.idea/
+# IDE / Editor specific
 .vscode/
-*.sublime-project
-*.sublime-workspace
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Data and Logs
+data/
+logs/
+*.log
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Fly.io specific (if not needed in repo)
+# fly.toml # Keep this if you deploy using flyctl from the repo
+
+# NLTK Data (usually large and downloadable)
+# nltk_data/ # Uncomment if you store NLTK data locally and don't want it in git
 
 # OS specific files
 .DS_Store
 Thumbs.db
+question_answers.json
+.env copy
