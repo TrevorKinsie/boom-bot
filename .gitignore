@@ -9,6 +9,9 @@ logs/error.log
 venv/
 env/
 .venv/
+bin/
+lib/
+lib64/
 
 # Distribution / packaging
 dist/
@@ -31,3 +34,9 @@ htmlcov/
 # OS specific files
 .DS_Store
 Thumbs.db
+
+# Terraform
+**/.terraform/
+terraform/secrets/terraform.tfvars
+lib64
+pyvenv.cfg
