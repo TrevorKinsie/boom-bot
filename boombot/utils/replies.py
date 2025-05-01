@@ -128,10 +128,7 @@ SASSY_REPLIES_WHAT = [
     "Did you forget to finish your question?",
     "My psychic powers are offline. What needs rating?",
     "Sorry, my crystal ball is in the shop. What needs booms?"
-<<<<<<< Updated upstream
-=======
 ]
-
 
 VICTORY_REASONS = [
     # Tactical Superiority
@@ -289,5 +286,4 @@ CLOSE_MATCH_OUTCOMES = [
     "Analysis suggests a photo finish, with {winner} beating {loser} because of {reason}.",
     "A razor-thin victory for {winner} over {loser}, decided by {reason}.",
     "It could go either way, but {reason} gives {winner} the slight advantage needed to beat {loser}.",
->>>>>>> Stashed changes
 ]

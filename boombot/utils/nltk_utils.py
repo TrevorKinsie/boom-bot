@@ -3,6 +3,7 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 import string  # Added import
+import re  # Added import for regex
 
 logger = logging.getLogger(__name__)
 
@@ -113,3 +114,82 @@ def extract_subject(text: str) -> str:
     except Exception as e:
         logger.error(f"Error during subject extraction for '{text}': {e}")
         return text.strip().rstrip('?')  # Fallback
+
+
+def extract_contenders(text: str) -> list[str]:
+    """
+    Extract contenders from input like "X vs Y" or "between X and Y".
+    Returns a list of contenders.
+    """
+    try:
+        # Normalize text
+        text = text.strip().lower()
+        
+        # Common patterns for battle comparisons
+        vs_pattern = r'(.*?)\s+(?:vs\.?|versus)\s+(.*?)(?:\?|$|\.)'
+        between_pattern = r'between\s+(.*?)\s+and\s+(.*?)(?:\?|$|\.)'
+        or_pattern = r'(.*?)\s+or\s+(.*?)(?:\?|$|\.)'
+        
+        # Try each pattern
+        match = re.search(vs_pattern, text)
+        if match:
+            return [match.group(1).strip(), match.group(2).strip()]
+            
+        match = re.search(between_pattern, text)
+        if match:
+            return [match.group(1).strip(), match.group(2).strip()]
+            
+        match = re.search(or_pattern, text)
+        if match:
+            return [match.group(1).strip(), match.group(2).strip()]
+        
+        # If no patterns match, try to extract noun phrases
+        if not match:
+            # Tokenize and tag
+            tokens = word_tokenize(text)
+            tagged = nltk.pos_tag(tokens)
+            
+            # Look for nouns and noun sequences
+            contenders = []
+            current_contender = []
+            
+            for word, tag in tagged:
+                # Skip common separators and comparison words
+                if word.lower() in ['vs', 'versus', 'and', 'or', 'between', 'against']:
+                    if current_contender:
+                        contenders.append(" ".join(current_contender))
+                        current_contender = []
+                    continue
+                
+                # Collect nouns and adjectives (for "red car" type phrases)
+                if tag.startswith('NN') or tag.startswith('JJ'):
+                    current_contender.append(word)
+                # Close the current contender if we hit non-relevant parts
+                elif current_contender:
+                    contenders.append(" ".join(current_contender))
+                    current_contender = []
+            
+            # Don't forget last contender
+            if current_contender:
+                contenders.append(" ".join(current_contender))
+            
+            # Return unique contenders (at least 2)
+            unique_contenders = list(dict.fromkeys(contenders))
+            if len(unique_contenders) >= 2:
+                return unique_contenders
+        
+        # Fallback: split by common separators if we couldn't find defined contenders
+        if not match:
+            for sep in [' vs ', ' versus ', ' and ', ' or ', ' against ']:
+                if sep in text:
+                    parts = [p.strip() for p in text.split(sep) if p.strip()]
+                    if len(parts) >= 2:
+                        return parts
+        
+        # If all else fails, just return an empty list
+        logger.warning(f"Could not extract contenders from '{text}'")
+        return []
+        
+    except Exception as e:
+        logger.error(f"Error extracting contenders from '{text}': {e}")
+        return []
