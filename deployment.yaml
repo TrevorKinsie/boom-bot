@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: boom-bot-deployment
+  labels:
+    app: boom-bot
+spec:
+  replicas: 1 # Adjust the number of instances as needed
+  selector:
+    matchLabels:
+      app: boom-bot
+  template:
+    metadata:
+      labels:
+        app: boom-bot
+    spec:
+      containers:
+      - name: boom-bot
+        image: local-test/boom-bot:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080 # Matches the EXPOSE in Dockerfile, useful for potential health checks
+        env:
+        - name: TELEGRAM_TOKEN_DEV
+          valueFrom:
+            secretKeyRef:
+              name: boom-bot-secret
+              key: telegram-bot-token-dev
+        - name: TELEGRAM_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: boom-bot-secret
+              key: telegram-bot-token-prod
+        # Optional: Define resource requests and limits
+        # resources:
+        #   requests:
+        #     memory: "64Mi"
+        #     cpu: "100m"
+        #   limits:
+        #     memory: "128Mi"
+        #     cpu: "250m"
+      # Optional: Add readiness/liveness probes if your bot has an HTTP endpoint for health checks
+      # readinessProbe:
+      #   httpGet:
+      #     path: /healthz # Example path
+      #     port: 8080
+      #   initialDelaySeconds: 5
+      #   periodSeconds: 10
+      # livenessProbe:
+      #   httpGet:
+      #     path: /healthz # Example path
+      #     port: 8080
+      #   initialDelaySeconds: 15
+      #   periodSeconds: 20

@@ -1,0 +1,66 @@
+name: Deploy Kubernetes with PostgreSQL
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  terraform:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    
+    env:
+      TF_VAR_server_ip: ${{ secrets.SERVER_IP }}
+      TF_VAR_ssh_username: ${{ secrets.SSH_USERNAME }}
+      TF_VAR_ssh_password: ${{ secrets.SSH_PASSWORD }}
+      # PostgreSQL configuration
+      TF_VAR_postgres_password: ${{ secrets.POSTGRES_PASSWORD }}
+      TF_VAR_postgres_user: ${{ secrets.POSTGRES_USER || 'postgres' }}
+      TF_VAR_postgres_database: ${{ secrets.POSTGRES_DATABASE || 'postgres' }}
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+      
+      # Download state from server
+      - name: Download State File
+        run: |
+          mkdir -p terraform
+          sftp ${{ secrets.SSH_USERNAME }}@${{ secrets.SERVER_IP }}:/opt/terraform/state/terraform.tfstate terraform/ || echo "No existing state file found"
+      
+      # Initialize and apply Terraform configuration
+      - name: Terraform Init
+        run: terraform init
+        env:
+          TF_VAR_server_ip: ${{ secrets.SERVER_IP }}
+          TF_VAR_ssh_username: ${{ secrets.SSH_USERNAME }}
+          TF_VAR_ssh_password: ${{ secrets.SSH_PASSWORD }}
+          TF_VAR_postgres_password: ${{ secrets.POSTGRES_PASSWORD }}
+          TF_VAR_postgres_user: ${{ secrets.POSTGRES_USER }}
+          TF_VAR_postgres_database: ${{ secrets.POSTGRES_DATABASE }}
+        
+      - name: Terraform Apply
+        run: cd terraform && terraform apply -auto-approve
+      
+      # Upload state back to server
+      - name: Upload State File
+        run: |
+          sftp ${{ secrets.SSH_USERNAME }}@${{ secrets.SERVER_IP }} <<EOF
+          mkdir -p /opt/terraform/state
+          put terraform/terraform.tfstate /opt/terraform/state/terraform.tfstate
+          EOF
+      
+      # Verify installation
+      - name: Verify Kubernetes and PostgreSQL
+        run: |
+          ssh ${{ secrets.SSH_USERNAME }}@${{ secrets.SERVER_IP }} '
+            kubectl get nodes
+            kubectl get pods -A
+            kubectl get pods -n postgres
+            kubectl get svc -n postgres
+          '

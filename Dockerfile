@@ -4,6 +4,9 @@ FROM python:3.13.3-alpine
 # Set the working directory in the container
 WORKDIR /app
 
+# Create a non-root user and group
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
 # Copy the requirements file into the container at /app
 COPY requirements.txt .
 
@@ -20,10 +23,16 @@ COPY . .
 # Install the package in development mode
 RUN pip install -e .
 
-# Make port 8080 available to the world outside this container (if needed for health checks, though Telegram bots usually poll)
-# EXPOSE 8080 # Fly.io might require an exposed port for health checks, uncomment if needed.
+# Change ownership of the app directory to the non-root user
+RUN chown -R appuser:appgroup /app
 
-# Define environment variable (optional, can be set via Fly secrets)
+# Switch to the non-root user
+USER appuser
+
+# Make port 8080 available for health checks
+EXPOSE 8080
+
+# Define environment variable (optional, can be set via Fly secrets or Kubernetes Secrets/ConfigMaps)
 # ENV TELEGRAM_BOT_TOKEN=your_token_here
 
 # Run the bot using the new entry point

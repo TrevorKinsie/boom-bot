@@ -1,0 +1,122 @@
+name: Deploy Infrastructure with Terraform
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Allows manual triggering
+
+jobs:
+  terraform:
+    name: 'Terraform Deploy'
+    runs-on: ubuntu-latest
+    env:
+      # Set the working directory for Terraform commands
+      TF_WORKING_DIR: ./terraform
+      # Pass secrets as Terraform variables
+      # TF_VAR_ prefix makes them available to Terraform
+      TF_VAR_server_ip: ${{ secrets.SERVER_IP }}
+      TF_VAR_ssh_username: ${{ secrets.SSH_USERNAME }}
+      TF_VAR_ssh_password: ${{ secrets.SSH_PASSWORD }}
+      TF_VAR_postgres_password: ${{ secrets.POSTGRES_PASSWORD }}
+      TF_VAR_postgres_user: ${{ secrets.POSTGRES_USER }}
+      TF_VAR_postgres_database: ${{ secrets.POSTGRES_DATABASE }}
+      GH_PAT: ${{ secrets.GH_PAT }} # Requires GH_PAT secret
+
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: latest # Or pin to a specific version
+
+    - name: Terraform Init
+      id: init
+      run: terraform init
+      working-directory: ${{ env.TF_WORKING_DIR }}
+
+    - name: Terraform Plan
+      id: plan
+      run: terraform plan -no-color
+      working-directory: ${{ env.TF_WORKING_DIR }}
+      # Continue even if plan shows changes, apply step handles confirmation
+      continue-on-error: true
+
+    - name: Terraform Apply Infrastructure
+      if: steps.plan.outcome == 'success' || steps.plan.outcome == 'failure' # Run apply if plan succeeded or had changes
+      run: terraform apply -auto-approve
+      working-directory: ${{ env.TF_WORKING_DIR }}
+
+    # --- Docker Build and Push ---
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GH_PAT }} # Requires GH_PAT secret
+
+    - name: Extract metadata (tags, labels) for Docker
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ghcr.io/${{ github.repository }} # ghcr.io/owner/repo
+        tags: |
+          type=sha,format=short # Use short git sha as tag
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+
+    # --- Deploy bot to Kubernetes with Terraform ---
+    - name: Copy kubeconfig from server
+      run: |
+        # Ensure the target directory exists on the runner
+        mkdir -p ~/.kube
+        # Copy kubeconfig from server - adjust path based on your k8s installation
+        scp -i ~/.ssh/id_rsa_tf ${{ secrets.SSH_USERNAME }}@${{ secrets.SERVER_IP }}:/etc/rancher/k3s/k3s.yaml ~/.kube/config 2>/dev/null || \
+        scp -i ~/.ssh/id_rsa_tf ${{ secrets.SSH_USERNAME }}@${{ secrets.SERVER_IP }}:/etc/kubernetes/admin.conf ~/.kube/config
+        
+        # Fix the server endpoint in the kubeconfig to use the real IP
+        sed -i "s|https://127.0.0.1:6443|https://${{ secrets.SERVER_IP }}:6443|g" ~/.kube/config
+        chmod 600 ~/.kube/config
+
+    # Apply bot deployment with Terraform
+    - name: Deploy bot with Terraform
+      run: |
+        # Extract image tag from previous step
+        IMAGE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | cut -d: -f2)
+        
+        # Apply only the bot deployment resources
+        terraform apply -auto-approve \
+          -var="bot_image=ghcr.io/${{ github.repository }}" \
+          -var="bot_image_tag=${IMAGE_TAG}" \
+          -var="postgres_host=postgresql.default.svc.cluster.local" \
+          -var="bot_container_port=8080"
+      working-directory: ${{ env.TF_WORKING_DIR }}
+      env:
+        # Pass secrets as environment variables
+        TF_VAR_postgres_password: ${{ secrets.POSTGRES_PASSWORD }}
+        TF_VAR_postgres_user: ${{ secrets.POSTGRES_USER }}
+        TF_VAR_postgres_database: ${{ secrets.POSTGRES_DATABASE }}
+        KUBECONFIG: ~/.kube/config
+
+    # Optional: Verify deployment
+    - name: Verify deployment
+      run: |
+        kubectl get pods -l app=boom-bot
+        kubectl get services -l app=boom-bot
+      env:
+        KUBECONFIG: ~/.kube/config
