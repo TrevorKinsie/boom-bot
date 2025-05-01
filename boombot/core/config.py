@@ -20,6 +20,10 @@ else:
 if not TELEGRAM_TOKEN:
     raise ValueError("TELEGRAM_TOKEN environment variable not set!")
 
+
+# --- LLM Configuration ---
+LLM_API_KEY = os.getenv("LLM_API_KEY")
+
 # --- Persistent Data Configuration ---
 # Use a directory within the package instead of /data for local development
 PACKAGE_DIR = Path(__file__).resolve().parent.parent  # Points to the boombot package directory
