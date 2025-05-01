@@ -40,3 +40,4 @@ Thumbs.db
 terraform/secrets/terraform.tfvars
 lib64
 pyvenv.cfg
+.envcopy

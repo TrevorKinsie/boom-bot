@@ -1,6 +1,7 @@
 python-telegram-bot
 python-dotenv
 nltk
-inflect # Add inflect library for pluralization
+inflect
 pytest
 pytest-asyncio
+requests

@@ -5,6 +5,7 @@ from telegram.ext import ContextTypes
 
 from boombot.handlers.beast_handlers import whowouldwin_command
 from boombot.utils.replies import VICTORY_REASONS, BATTLE_OUTCOMES, CLOSE_MATCH_OUTCOMES
+from boombot.utils.llm import get_openrouter_response
 
 # --- Fixtures for testing ---
 
@@ -52,104 +53,77 @@ async def test_whowouldwin_no_contenders_found(mock_extract_contenders, mock_upd
 
 @pytest.mark.asyncio
 @patch('boombot.handlers.beast_handlers.extract_contenders', return_value=["lions", "tigers"])
-@patch('boombot.handlers.beast_handlers.random.random', return_value=0.3)  # First contender wins
-@patch('boombot.handlers.beast_handlers.random.choice')
-async def test_whowouldwin_two_contenders_first_wins(mock_random_choice, mock_random, mock_extract_contenders, 
+@patch('boombot.handlers.beast_handlers.get_openrouter_response')
+async def test_whowouldwin_two_contenders_first_wins(mock_get_openrouter_response, mock_extract_contenders, 
                                                     mock_update, mock_context):
     """Test with two contenders where the first one wins."""
     mock_context.args = ["lions", "vs", "tigers"]
-    mock_random_choice.side_effect = ["superior strength", "In an epic battle between {winner} and {loser}, {winner} would emerge victorious due to their {reason}."]
+    mock_get_openrouter_response.return_value = "The fierce battle between lions and tigers was a spectacle of raw strength and agility. The lion, with its majestic roar and formidable size, seemed to possess an almost divine power, while the tiger, with its stealth and cunning, demonstrated remarkable adaptability. In the end, it was the lion that triumphed, showcasing unparalleled dominance and sheer strength, leaving the tiger in awe. The lion emerged victorious, its pride and power a testament to nature's grandeur."
     
     await whowouldwin_command(mock_update, mock_context)
     
     mock_extract_contenders.assert_called_once_with("lions vs tigers")
-    mock_random_choice.assert_any_call(VICTORY_REASONS)
-    mock_random_choice.assert_any_call(BATTLE_OUTCOMES)
+    mock_get_openrouter_response.assert_called_once_with("Who would win in a battle between lions vs tigers?")
     
     mock_update.message.reply_text.assert_awaited_once()
     call_args = mock_update.message.reply_text.await_args[0][0]
-    assert "Lions" in call_args
-    assert "tigers" in call_args
-    assert "superior strength" in call_args
+    assert "lion" in call_args.lower()
+    assert "tiger" in call_args.lower()
 
 @pytest.mark.asyncio
 @patch('boombot.handlers.beast_handlers.extract_contenders', return_value=["lions", "tigers"])
-@patch('boombot.handlers.beast_handlers.random.random', return_value=0.7)  # Second contender wins
-@patch('boombot.handlers.beast_handlers.random.choice')
-async def test_whowouldwin_two_contenders_second_wins(mock_random_choice, mock_random, mock_extract_contenders, 
+@patch('boombot.handlers.beast_handlers.get_openrouter_response')
+async def test_whowouldwin_two_contenders_second_wins(mock_get_openrouter_response, mock_extract_contenders,
                                                      mock_update, mock_context):
     """Test with two contenders where the second one wins."""
     mock_context.args = ["lions", "vs", "tigers"]
-    mock_random_choice.side_effect = ["tactical superiority", "No contest - {winner} would demolish {loser} thanks to their {reason}."]
+    mock_get_openrouter_response.return_value = "The lion, with its majestic might and regal presence, would decisively emerge victorious, crushing the tiger in the fierce encounter, showcasing unparalleled dominance and strength."
     
     await whowouldwin_command(mock_update, mock_context)
     
     mock_extract_contenders.assert_called_once_with("lions vs tigers")
-    mock_random_choice.assert_any_call(VICTORY_REASONS)
-    mock_random_choice.assert_any_call(BATTLE_OUTCOMES)
+    mock_get_openrouter_response.assert_called_once_with("Who would win in a battle between lions vs tigers?")
     
     mock_update.message.reply_text.assert_awaited_once()
     call_args = mock_update.message.reply_text.await_args[0][0]
-    assert "Tigers" in call_args
-    assert "lions" in call_args
-    assert "tactical superiority" in call_args
+    assert "lion" in call_args.lower()
+    assert "tiger" in call_args.lower()
 
 @pytest.mark.asyncio
 @patch('boombot.handlers.beast_handlers.extract_contenders', return_value=["ninjas", "pirates", "robots"])
-@patch('boombot.handlers.beast_handlers.random.random', return_value=0.1)  # Close match
-@patch('boombot.handlers.beast_handlers.random.choice')
-async def test_whowouldwin_multiple_contenders(mock_random_choice, mock_random, mock_extract_contenders, 
+@patch('boombot.handlers.beast_handlers.get_openrouter_response')
+async def test_whowouldwin_multiple_contenders(mock_get_openrouter_response, mock_extract_contenders, 
                                               mock_update, mock_context):
     """Test with more than two contenders."""
     mock_context.args = ["ninjas", "vs", "pirates", "vs", "robots"]
-    # First random.choice selects "ninjas" as winner, second selects "pirates" as loser,
-    # third selects reason, fourth selects template
-    mock_random_choice.side_effect = ["ninjas", "pirates", "ancient powers", 
-                                     "It's a close one, but {winner} edges out {loser} thanks to slightly better {reason}."]
+    mock_get_openrouter_response.return_value = "In a dramatic clash, ninjas, with their agility and deadly skills, would emerge victorious, followed closely by a fierce battle between pirates and robots, each uniting their unique strengths to outmaneuver each other until the robots, with their advanced technology and strategic prowess, claim the ultimate victory over the agile ninjas and the cunning pirates."
     
     await whowouldwin_command(mock_update, mock_context)
     
     mock_extract_contenders.assert_called_once_with("ninjas vs pirates vs robots")
-    
-    # Check that random.choice was called with the right arguments
-    assert mock_random_choice.call_count == 4
-    winners_call = mock_random_choice.mock_calls[0][1][0]
-    assert set(winners_call) == {"ninjas", "pirates", "robots"}
-    
-    remaining_call = mock_random_choice.mock_calls[1][1][0]
-    # The remaining list should have exactly 2 items (3 contenders - 1 winner)
-    assert len(remaining_call) == 2
-    # The remaining list should not contain the winner
-    assert "ninjas" not in remaining_call
-    
-    mock_random_choice.assert_any_call(VICTORY_REASONS)
-    mock_random_choice.assert_any_call(CLOSE_MATCH_OUTCOMES)
+    mock_get_openrouter_response.assert_called_once_with("Who would win in a battle between ninjas vs pirates vs robots?")
     
     mock_update.message.reply_text.assert_awaited_once()
     call_args = mock_update.message.reply_text.await_args[0][0]
-    assert "Ninjas" in call_args
-    assert "pirates" in call_args
-    assert "ancient powers" in call_args
-    assert "edges out" in call_args  # From the CLOSE_MATCH_OUTCOMES template
+    assert "ninjas" in call_args.lower()
+    assert "pirates" in call_args.lower()
+    assert "robots" in call_args.lower()
 
 @pytest.mark.asyncio
 @patch('boombot.handlers.beast_handlers.extract_contenders', return_value=["cats", "dogs"])
-@patch('boombot.handlers.beast_handlers.random.random', return_value=0.9)  # Second contender wins, not close match
-@patch('boombot.handlers.beast_handlers.random.choice')
-async def test_whowouldwin_not_close_match(mock_random_choice, mock_random, mock_extract_contenders, 
+@patch('boombot.handlers.beast_handlers.get_openrouter_response')
+async def test_whowouldwin_not_close_match(mock_get_openrouter_response, mock_extract_contenders,
                                           mock_update, mock_context):
     """Test where the match is not considered close."""
     mock_context.args = ["cats", "or", "dogs"]
-    mock_random_choice.side_effect = ["higher intelligence", 
-                                     "{winner} vs {loser}? {winner} takes this one with {reason}."]
+    mock_get_openrouter_response.return_value = "In a fierce battle of cats vs dogs, the feline warriors, with their sharp claws and agile paws, would emerge victorious. The canine pack, with their powerful bodies and sharp teeth, would struggle against their feline counterparts' agility, ultimately succumbing to their superior speed and stealth. The felines, with their cunning and quick thinking, would outmaneuver the dogs, securing the victory in a dazzling display of ferocious might and relentless persistence."
     
     await whowouldwin_command(mock_update, mock_context)
     
     mock_extract_contenders.assert_called_once_with("cats or dogs")
-    mock_random_choice.assert_any_call(VICTORY_REASONS)
-    mock_random_choice.assert_any_call(BATTLE_OUTCOMES)  # Should use regular outcomes, not close match
+    mock_get_openrouter_response.assert_called_once_with("Who would win in a battle between cats vs dogs?")
     
     mock_update.message.reply_text.assert_awaited_once()
     call_args = mock_update.message.reply_text.await_args[0][0]
-    assert "Dogs vs cats?" in call_args
-    assert "higher intelligence" in call_args
+    assert "cats" in call_args.lower()
+    assert "dogs" in call_args.lower()

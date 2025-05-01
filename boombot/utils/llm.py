@@ -28,7 +28,7 @@ def get_openrouter_response(question: str) -> str:
             "messages": [
                 {
                     "role": "user",
-                    "content": f"Provide an answer to the question in the form of a battle summary in 1 line, being extremely dramatic: '{question}'"
+                    "content": f"Provide a concrete answer to the question in the form of a battle summary in a single line, being extremely dramatic: '{question}'"
                 }
             ]
         })
