@@ -1,0 +1,80 @@
+# Bitnami PostgreSQL Helm chart values
+global:
+  storageClass: ""
+
+## PostgreSQL parameters
+##
+image:
+  registry: docker.io
+  repository: bitnami/postgresql
+  tag: 15.5.0-debian-11-r0
+
+## PostgreSQL Authentication parameters
+auth:
+  enablePostgresUser: true
+  postgresPassword: ""  # This will be overridden by command line
+  # Additional username/password/database
+  username: ""          # This will be overridden by command line
+  password: ""          # This will be overridden by command line
+  database: ""          # This will be overridden by command line
+
+## PostgreSQL Primary configuration
+primary:
+  persistence:
+    enabled: true
+    size: 8Gi
+  resources:
+    limits:
+      memory: 1Gi
+      cpu: 1000m
+    requests:
+      memory: 256Mi
+      cpu: 250m
+
+## PostgreSQL network settings
+service:
+  type: ClusterIP
+  port: 5432
+
+# MetricsConfiguration
+metrics:
+  enabled: false  # Set to true if you want to enable Prometheus metrics
+  serviceMonitor:
+    enabled: false
+
+# Initialize the database with a custom script
+initdb:
+  scripts:
+    00_create_extensions.sql: |
+      CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+      CREATE EXTENSION IF NOT EXISTS "hstore";
+      CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
+
+# Configure PostgreSQL parameters
+postgresql:
+  parameters:
+    shared_buffers: "256MB"
+    max_connections: "100"
+    effective_cache_size: "1GB"
+    work_mem: "4MB"
+    maintenance_work_mem: "64MB"
+    max_wal_size: "1GB"
+    min_wal_size: "80MB"
+    checkpoint_completion_target: "0.9"
+    random_page_cost: "1.1"
+    effective_io_concurrency: "200"
+    autovacuum: "on"
+    log_statement: "none"  # Other options: ddl, mod, all
+
+# NetworkPolicy settings
+networkPolicy:
+  enabled: false
+
+# Use PodSecurityContext settings
+primary:
+  podSecurityContext:
+    enabled: true
+    fsGroup: 1001
+  containerSecurityContext:
+    enabled: true
+    runAsUser: 1001
