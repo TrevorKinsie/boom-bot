@@ -4,7 +4,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from boombot.utils.nltk_utils import extract_contenders
-from boombot.utils.replies import VICTORY_REASONS, BATTLE_OUTCOMES, CLOSE_MATCH_OUTCOMES
+from boombot.utils.llm import get_openrouter_response
 
 logger = logging.getLogger(__name__)
 
@@ -46,32 +46,16 @@ async def whowouldwin_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return
     
-    # Choose a random winner and loser if there are only 2 contenders
-    if len(contenders) == 2:
-        if random.random() < 0.5:
-            winner, loser = contenders
-        else:
-            loser, winner = contenders
-    else:
-        # If more than 2 contenders, pick a random winner and a different random loser
-        winner = random.choice(contenders)
-        remaining = [c for c in contenders if c != winner]
-        loser = random.choice(remaining) if remaining else "the rest"
+    # Construct the battle question for the LLM
+    battle_question = f"Who would win in a battle between {' vs '.join(contenders)}?"
     
-    # Determine if this is a close match (20% chance)
-    is_close_match = random.random() < 0.2
-    
-    # Pick a reason for victory
-    reason = random.choice(VICTORY_REASONS)
-    
-    # Choose a response template based on whether it's a close match
-    if is_close_match:
-        template = random.choice(CLOSE_MATCH_OUTCOMES)
-    else:
-        template = random.choice(BATTLE_OUTCOMES)
-    
-    # Format the response
-    response = template.format(winner=winner.capitalize(), loser=loser, reason=reason)
+    # Get response from the LLM
+    try:
+        response = get_openrouter_response(battle_question)
+        logger.info(f"LLM response for battle: {response}")
+    except Exception as e:
+        logger.error(f"Error getting LLM response: {e}")
+        response = f"A battle between {' and '.join(contenders)} would be legendary, but I'm having trouble accessing my battle vision right now."
     
     # Send the response
     await update.message.reply_text(response)
