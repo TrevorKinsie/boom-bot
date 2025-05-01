@@ -19,6 +19,8 @@ from boombot.handlers.base_handlers import (
 )
 # Add roulette handler imports
 from boombot.handlers.roulette_handlers import start_roulette_command, roulette_callback_handler
+# Import beast handlers
+from boombot.handlers.beast_handlers import whowouldwin_command
 from boombot.core.config import TELEGRAM_TOKEN # Corrected import name
 from boombot.games.zeus.zeus import zeus, spin_button  # Import Zeus handlers
 
@@ -60,7 +62,11 @@ def create_application(token: str) -> Application:
     application.add_handler(CommandHandler("howmanybooms", booms_command))
     application.add_handler(MessageHandler(filters.PHOTO & filters.CAPTION, handle_photo_caption))
 
-    # --- Craps Game Handlers (Inline Keyboard) ---
+
+    # --- Beast Wars Handlers ---
+    application.add_handler(CommandHandler("whowouldwin", whowouldwin_command))
+
+    # --- Craps Game Handlers ---
     application.add_handler(CommandHandler("craps", start_craps_command))
     application.add_handler(CallbackQueryHandler(craps_callback_handler, pattern='^craps_')) # Pattern matches our callback data
     application.add_handler(CommandHandler("bet", bet_command))
