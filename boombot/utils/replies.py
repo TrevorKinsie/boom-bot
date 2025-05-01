@@ -128,4 +128,166 @@ SASSY_REPLIES_WHAT = [
     "Did you forget to finish your question?",
     "My psychic powers are offline. What needs rating?",
     "Sorry, my crystal ball is in the shop. What needs booms?"
+<<<<<<< Updated upstream
+=======
+]
+
+
+VICTORY_REASONS = [
+    # Tactical Superiority
+    "overwhelming force",
+    "strategic encirclement",
+    "precision targeting",
+    "tactical deception",
+    "superior battlefield awareness",
+    "exploitation of terrain",
+    "ambush mastery",
+    "flanking maneuvers",
+    "choke point control",
+    "psychological warfare",
+    
+    # Combat Attributes
+    "relentless aggression",
+    "combat experience",
+    "ruthless efficiency",
+    "overwhelming firepower",
+    "brutal strength",
+    "lethal precision",
+    "unmatched speed",
+    "combat adaptability",
+    "killing instinct",
+    "calculated savagery",
+    
+    # Physical Dominance
+    "superior reflexes",
+    "devastating striking power",
+    "anatomical targeting",
+    "physical intimidation",
+    "combat conditioning",
+    "pain tolerance",
+    "lethal technique",
+    "crushing strength",
+    "biomechanical advantage",
+    "physical dominance",
+    
+    # Weapons & Technology
+    "superior weaponry",
+    "technological advantage",
+    "armor penetration",
+    "weapons expertise",
+    "advanced targeting",
+    "stealth technology",
+    "overwhelming firepower",
+    "combat gear optimization",
+    "ballistic superiority",
+    "weapons customization",
+    
+    # Mental Factors
+    "strategic foresight",
+    "tactical analysis",
+    "combat intuition",
+    "battlefield calculation",
+    "unwavering focus",
+    "psychological resilience",
+    "threat assessment",
+    "pattern recognition",
+    "strategic patience",
+    "adaptive planning",
+    
+    # Training & Preparation
+    "elite conditioning",
+    "combat readiness",
+    "mission preparation",
+    "specialized training",
+    "battlefield simulation",
+    "threat-specific preparation",
+    "combat doctrine",
+    "tactical drilling",
+    "scenario planning",
+    "muscle memory",
+    
+    # Environmental Mastery
+    "terrain exploitation",
+    "environmental adaptation",
+    "weather tactical leverage",
+    "nocturnal combat proficiency",
+    "urban warfare expertise",
+    "jungle combat mastery",
+    "desert warfare adaptation",
+    "arctic survival skill",
+    "aquatic combat capability",
+    "environmental endurance",
+    
+    # Lethal Skills
+    "close-quarters dominance",
+    "sniper precision",
+    "infiltration expertise",
+    "demolition proficiency",
+    "martial prowess",
+    "blade mastery",
+    "unarmed lethality",
+    "rapid neutralization",
+    "assassination training",
+    "anatomical strike precision",
+    
+    # Strategic Elements
+    "resource control",
+    "supply line disruption",
+    "intelligence superiority",
+    "communication interception",
+    "strategic positioning",
+    "force multiplication",
+    "critical timing",
+    "deception operations",
+    "logistical advantage",
+    "command structure disruption",
+    
+    # Ruthless Advantages
+    "exploitation of weakness",
+    "merciless execution",
+    "psychological domination",
+    "unconventional tactics",
+    "hostage leverage",
+    "collateral indifference",
+    "intimidation effectiveness",
+    "fear exploitation",
+    "demoralization tactics",
+    "willingness to sacrifice"
+]
+
+# Different formats for battle outcome responses
+BATTLE_OUTCOMES = [
+    "In an epic battle between {winner} and {loser}, {winner} would emerge victorious due to their {reason}.",
+    "No contest - {winner} would demolish {loser} thanks to their {reason}.",
+    "After careful analysis, {winner} beats {loser} every time because of {reason}.",
+    "It's clear that {winner} would triumph over {loser} through {reason}.",
+    "In a surprising turn of events, {winner} would overcome {loser} with {reason}.",
+    "The battle between {winner} and {loser} would end with {winner} winning through {reason}.",
+    "{winner} vs {loser}? {winner} takes this one with {reason}.",
+    "Scientists agree: {winner} would defeat {loser} using {reason}.",
+    "In this theoretical matchup, {winner} beats {loser} by leveraging {reason}.",
+    "History would record {winner} defeating {loser} through clever use of {reason}.",
+    "The odds favor {winner} over {loser} due to {reason}.",
+    "{winner} would reign supreme over {loser}, all because of {reason}.",
+]
+
+# Close match formats for more interesting responses
+CLOSE_MATCH_OUTCOMES = [
+    "In a neck-and-neck battle, {winner} would narrowly defeat {loser}, with {reason} being the deciding factor.",
+    "It's a close one, but {winner} edges out {loser} thanks to slightly better {reason}.",
+    "After an exhausting battle, {winner} would barely overcome {loser} through {reason}.",
+    "Both are formidable, but {winner} has the slight edge over {loser} with {reason}.",
+    "{winner} vs {loser} would be legendary, with {winner} winning by the slimmest margin due to {reason}.",
+    "It would be incredibly tough, but {winner} ultimately prevails against {loser} using {reason}.",
+    "{winner} just barely scrapes by {loser} in a nail-biter, thanks to {reason}.",
+    "After giving it their all, {winner} manages to secure victory over {loser} by leveraging {reason}.",
+    "The scales tip ever so slightly in favor of {winner} against {loser}, primarily because of {reason}.",
+    "A real seesaw battle! In the end, {winner} pulls ahead of {loser} due to {reason}.",
+    "Down to the wire, {winner} clinches the win against {loser} thanks to {reason}.",
+    "{winner} holds a minuscule advantage, enough to beat {loser} through {reason}.",
+    "Through sheer grit and {reason}, {winner} overcomes the formidable challenge posed by {loser}.",
+    "Analysis suggests a photo finish, with {winner} beating {loser} because of {reason}.",
+    "A razor-thin victory for {winner} over {loser}, decided by {reason}.",
+    "It could go either way, but {reason} gives {winner} the slight advantage needed to beat {loser}.",
+>>>>>>> Stashed changes
 ]
