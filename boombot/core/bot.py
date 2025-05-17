@@ -21,6 +21,8 @@ from boombot.handlers.base_handlers import (
 from boombot.handlers.roulette_handlers import start_roulette_command, roulette_callback_handler
 # Import beast handlers
 from boombot.handlers.beast_handlers import whowouldwin_command
+# Import deposit handlers
+from boombot.handlers.deposit_handlers import frigged_deposit_command
 from boombot.core.config import TELEGRAM_TOKEN # Corrected import name
 from boombot.games.zeus.zeus import zeus, spin_button  # Import Zeus handlers
 
@@ -65,6 +67,9 @@ def create_application(token: str) -> Application:
 
     # --- Beast Wars Handlers ---
     application.add_handler(CommandHandler("whowouldwin", whowouldwin_command))
+
+    # --- Deposit Handlers ---
+    application.add_handler(CommandHandler("friggedthedeposit", frigged_deposit_command))
 
     # --- Craps Game Handlers ---
     application.add_handler(CommandHandler("craps", start_craps_command))
