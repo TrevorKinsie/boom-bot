@@ -1,10 +1,12 @@
 import logging
+import re
 
 import requests
 
 from boombot.core.config import (
     LLM_API_KEY,
     LLM_APP_NAME,
+    LLM_FOLLOW_MODEL_HINTS,
     LLM_MODELS,
     LLM_REFERER,
     LLM_TIMEOUT,
@@ -13,6 +15,11 @@ from boombot.core.config import (
 logger = logging.getLogger(__name__)
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+# When a model is retired or moved off the free tier, OpenRouter 404s with the
+# replacement slug in the message, e.g. "This model is unavailable for free. The
+# paid version is available now - use this slug instead: deepseek/deepseek-chat-v3-0324".
+SLUG_HINT_PATTERN = re.compile(r"use this slug instead:?\s*([\w./:-]+)")
 
 SYSTEM_PROMPT = (
     "You are a ringside announcer for absurd hypothetical matchups. "
@@ -73,8 +80,24 @@ def _extract_text(payload: dict) -> str | None:
     return None
 
 
-def _complete(model: str, question: str) -> str | None:
-    """Ask a single model. Returns None if it errors out or says nothing."""
+def _suggested_model(detail: str | None, model: str) -> str | None:
+    """Pull a replacement slug out of an OpenRouter error message, if it names one."""
+    if not detail:
+        return None
+    match = SLUG_HINT_PATTERN.search(detail)
+    if not match:
+        return None
+    suggestion = match.group(1).rstrip(".,")
+    return suggestion if suggestion != model else None
+
+
+def _complete(model: str, question: str) -> tuple[str | None, str | None]:
+    """Ask a single model.
+
+    Returns a (answer, replacement_model) pair. The answer is None if the model
+    errors out or says nothing; the replacement is set only when OpenRouter's
+    error names another slug to use instead.
+    """
     try:
         response = requests.post(
             url=OPENROUTER_URL,
@@ -99,7 +122,7 @@ def _complete(model: str, question: str) -> str | None:
         )
     except requests.RequestException as e:
         logger.warning(f"OpenRouter request failed for model '{model}': {e}")
-        return None
+        return None, None
 
     try:
         payload = response.json()
@@ -108,26 +131,28 @@ def _complete(model: str, question: str) -> str | None:
             f"OpenRouter returned non-JSON for model '{model}' "
             f"(HTTP {response.status_code}): {response.text[:500]}"
         )
-        return None
+        return None, None
 
     if not isinstance(payload, dict):
         logger.warning(
             f"Unexpected OpenRouter payload for model '{model}': {payload!r}"
         )
-        return None
+        return None, None
 
     # OpenRouter reports model/rate-limit problems as an `error` object, which
     # previously surfaced only as a KeyError on 'choices' with no explanation.
     error = payload.get("error")
     if error or not response.ok:
         detail = error.get("message") if isinstance(error, dict) else error
+        if not isinstance(detail, str):
+            detail = None
         logger.warning(
             f"OpenRouter error for model '{model}' "
             f"(HTTP {response.status_code}): {detail or response.text[:500]}"
         )
-        return None
+        return None, _suggested_model(detail, model)
 
-    return _extract_text(payload)
+    return _extract_text(payload), None
 
 
 def get_openrouter_response(question: str) -> str:
@@ -143,12 +168,43 @@ def get_openrouter_response(question: str) -> str:
         logger.error("LLM_API_KEY not set in environment variables")
         return f"Unable to process: '{question}' - API key not configured"
 
-    for model in LLM_MODELS:
-        answer = _complete(model, question)
+    pending = list(LLM_MODELS)
+    tried: set[str] = set()
+
+    while pending:
+        model = pending.pop(0)
+        if model in tried:
+            continue
+        tried.add(model)
+
+        answer, replacement = _complete(model, question)
         if answer:
             logger.info(f"Battle verdict came from model '{model}'")
             return answer
-        logger.warning(f"Model '{model}' gave no usable answer, trying the next one.")
+
+        # A retired model usually points at its own replacement, so try that
+        # before falling further down the configured chain.
+        if replacement and replacement not in tried:
+            if LLM_FOLLOW_MODEL_HINTS:
+                logger.info(
+                    f"OpenRouter suggested '{replacement}' in place of '{model}'; "
+                    "trying that next."
+                )
+                pending.insert(0, replacement)
+            else:
+                logger.info(
+                    f"OpenRouter suggests '{replacement}' in place of '{model}'. "
+                    "Set LLM_FOLLOW_MODEL_HINTS=true to follow suggestions like "
+                    "this automatically -- note the replacement is usually the "
+                    "paid model."
+                )
+
+        if pending:
+            logger.warning(
+                f"Model '{model}' gave no usable answer, trying the next one."
+            )
+        else:
+            logger.warning(f"Model '{model}' gave no usable answer.")
 
     logger.error(f"Every configured model failed for question: {question!r}")
     return UNREACHABLE_REPLY
