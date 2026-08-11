@@ -11,6 +11,7 @@ A Telegram bot that provides boom counts and plays Craps.
 *   `/boom <non-number>`: Sends a sassy reply about needing a number.
 *   `/howmanybooms <question>`: Asks the bot how many booms something deserves (e.g., `/howmanybooms does my cat deserve`). The bot remembers questions and provides consistent (randomly assigned) answers using NLTK for fuzzy matching.
 *   Sending a photo with `/howmanybooms <question>` in the caption: Same as the text command, but triggered by a photo caption.
+*   `/whowouldwin <contenders>`: Asks an LLM to call a hypothetical fight (e.g. `/whowouldwin lions vs tigers`, `/whowouldwin between 100 men and one gorilla`). Requires `LLM_API_KEY` (see below).
 *   **Craps Game (Multi-Channel & Multi-Player):**
     *   `/roll`: Rolls the dice for the current channel's Craps game. Resolves bets for all players in the channel.
     *   `/bet <type> <amount>`: Places a bet for the user in the current channel. Valid types include `pass_line`, `dont_pass`, `field`, `place_4`, `place_5`, `place_6`, `place_8`, `place_9`, `place_10`. (e.g., `/bet pass_line 10`, `/bet place 6 12`).
@@ -57,5 +58,22 @@ A Telegram bot that provides boom counts and plays Craps.
     ```bash
     python bot.py
     ```
+
+## LLM Configuration (`/whowouldwin`)
+
+`/whowouldwin` calls [OpenRouter](https://openrouter.ai). Set these in `.env`:
+
+| Variable | Required | Default | Purpose |
+| --- | --- | --- | --- |
+| `LLM_API_KEY` | yes | – | OpenRouter API key. Without it the command replies that it isn't configured. |
+| `LLM_MODELS` | no | `deepseek/deepseek-chat-v3-0324:free,meta-llama/llama-3.3-70b-instruct:free,google/gemini-2.0-flash-001` | Comma separated model chain, tried in order until one answers. |
+| `LLM_MODEL` | no | – | Shorthand for pinning a single model (ignored if `LLM_MODELS` is set). |
+| `LLM_TIMEOUT` | no | `30` | Per-request timeout in seconds. |
+| `LLM_REFERER` / `LLM_APP_NAME` | no | – / `boom-bot` | Optional OpenRouter attribution headers. |
+
+Free-tier models are rate limited and get retired without notice, which is why
+the default is a chain rather than a single model — if the first one 404s or
+429s the bot moves to the next. When every model fails, the reason is logged at
+`WARNING` with the HTTP status and OpenRouter's error message.
 
 The bot should now be running and connected to Telegram.
