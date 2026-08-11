@@ -11,6 +11,7 @@ import chess
 
 from boombot.games.chess.database import ChessDatabase
 from boombot.games.chess.engine import StockfishEngine
+from boombot.core.config import STOCKFISH_GAME_DEPTH
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ class GameService:
 
             if not community_is_white:
                 best_move = await asyncio.to_thread(
-                    self.engine.get_best_move, board.fen(), 10, clamped
+                    self.engine.get_best_move, board.fen(), STOCKFISH_GAME_DEPTH, clamped
                 )
                 move = board.parse_uci(best_move)
                 san = board.san(move)
@@ -91,7 +92,7 @@ class GameService:
                 eval_before = await asyncio.to_thread(
                     self.engine.get_evaluation,
                     current_fen,
-                    10,
+                    STOCKFISH_GAME_DEPTH,
                     game["difficulty"],
                 )
                 san = board.san(move)
@@ -100,7 +101,7 @@ class GameService:
                 eval_after = await asyncio.to_thread(
                     self.engine.get_evaluation,
                     fen_after_user,
-                    10,
+                    STOCKFISH_GAME_DEPTH,
                     game["difficulty"],
                 )
 
@@ -137,7 +138,7 @@ class GameService:
                 best_move = await asyncio.to_thread(
                     self.engine.get_best_move,
                     fen_after_user,
-                    15,
+                    STOCKFISH_GAME_DEPTH,
                     game["difficulty"],
                 )
                 cpu_move = board.parse_uci(best_move)

@@ -1,6 +1,8 @@
 import chess
 import pytest
 
+from boombot.games.chess import analysis_service as analysis_service_module
+from boombot.games.chess import game_service as game_service_module
 from boombot.games.chess.analysis_service import AnalysisService
 from boombot.games.chess.database import ChessDatabase
 from boombot.games.chess.game_service import GameService
@@ -8,18 +10,25 @@ from boombot.games.chess.image_service import image_service
 
 
 class FakeEngine:
+    def __init__(self):
+        self.best_move_calls = []
+        self.evaluation_calls = []
+
     def get_best_move(self, fen, depth=None, skill_level=20):
+        self.best_move_calls.append((fen, depth, skill_level))
         board = chess.Board(fen)
         return "e2e4" if board.turn == chess.WHITE else "e7e5"
 
     def get_evaluation(self, fen, depth=None, skill_level=20):
+        self.evaluation_calls.append((fen, depth, skill_level))
         return {"score": 0, "best_move": self.get_best_move(fen, depth, skill_level)}
 
 
 @pytest.mark.asyncio
 async def test_full_game_flow_persists_moves_and_score(tmp_path, monkeypatch):
     database = ChessDatabase(tmp_path / "chess.sqlite3")
-    service = GameService(database, FakeEngine())
+    engine = FakeEngine()
+    service = GameService(database, engine)
     monkeypatch.setattr("boombot.games.chess.game_service.random.random", lambda: 0.1)
 
     game = await service.create_game(123, 456, None, difficulty=10, first_name="Kevin")
@@ -33,6 +42,10 @@ async def test_full_game_flow_persists_moves_and_score(tmp_path, monkeypatch):
     assert result["userMoveFrom"] == "e2"
     assert result["userMoveTo"] == "e4"
     assert result["scoreDelta"] == 0
+    assert all(
+        depth == game_service_module.STOCKFISH_GAME_DEPTH
+        for _, depth, _ in engine.best_move_calls + engine.evaluation_calls
+    )
     assert len(database.find_moves(game["id"])) == 2
     assert database.find_active_game(123)["fen"] == result["fen"]
 
@@ -66,11 +79,16 @@ async def test_completed_game_is_analyzed_and_user_move_graded(tmp_path, monkeyp
     await service.make_move(123, 456, "player", "e4")
     await service.resign_game(123)
 
-    analysis = AnalysisService(database, FakeEngine())
+    engine = FakeEngine()
+    analysis = AnalysisService(database, engine)
     await analysis.process_pending_games()
     user_move = next(move for move in database.find_moves(game["id"]) if move["user_id"])
     assert user_move["best_move_suggestion"] == "e2e4"
     assert user_move["evaluation_score"] == 100
+    assert all(
+        depth == analysis_service_module.STOCKFISH_ANALYSIS_DEPTH
+        for _, depth, _ in engine.best_move_calls
+    )
 
     database.close()
 

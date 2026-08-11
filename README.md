@@ -109,10 +109,34 @@ The bot should now be running and connected to Telegram.
 The chess feature runs in the same Python process as the existing bot. It uses
 the native `stockfish` executable, `python-chess` for legal move handling, and
 SQLite for durable users, games, moves, and post-game analysis. The default
-database is `data/chess.sqlite3`, which is suitable for the existing `/data`
-Fly volume; set `CHESS_DATABASE_PATH` to override it.
+data directory is `./data` for local development. On Fly, `fly.toml` sets both
+`BOT_DATA_DIR` and `CHESS_DATABASE_PATH` to `/data`, which is the mounted
+persistent volume. Set either variable to override those locations.
 
 The Stockfish process is started lazily on the first game request. Configure
 its strength with `STOCKFISH_HASH_MB`, `STOCKFISH_THREADS`, and
-`STOCKFISH_DEPTH`. The analysis queue checks completed games every five
-seconds by default.
+`STOCKFISH_DEPTH`. `STOCKFISH_GAME_DEPTH` and `STOCKFISH_ANALYSIS_DEPTH` can
+override live-game and post-game analysis depth independently. The defaults
+use one thread, a 64 MB hash, depth 12, and a 15-second analysis interval so
+the bot remains within a small shared VM's memory budget.
+
+### Fly.io deployment
+
+The included Fly configuration pins one `shared-cpu-1x` Machine with 256 MB of
+RAM, one Stockfish thread, and the persistent `/data` volume. Keep this as a
+single Machine because SQLite volumes attach to one Machine; scaling out would
+require an external database or a replication layer.
+
+For a new app, create the volume in the app's primary region and deploy:
+
+```sh
+fly volumes create bot_data --region iad --size 1
+fly deploy
+```
+
+Skip volume creation if `bot_data` already exists. Fly's legacy free allowance
+is limited to qualifying older organizations; new organizations should expect
+usage-based billing. See [Fly pricing](https://fly.io/docs/about/pricing/),
+[Machine configuration](https://fly.io/docs/reference/configuration/), and
+[volume behavior](https://fly.io/docs/volumes/overview/) before changing the
+resource profile.

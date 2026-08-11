@@ -7,6 +7,7 @@ import logging
 
 import chess
 
+from boombot.core.config import STOCKFISH_ANALYSIS_DEPTH
 from boombot.games.chess.database import ChessDatabase
 from boombot.games.chess.engine import StockfishEngine
 
@@ -39,7 +40,10 @@ class AnalysisService:
                 if record["user_id"]:
                     current_fen = board.fen()
                     best_move_uci = await asyncio.to_thread(
-                        self.engine.get_best_move, current_fen, 15, 20
+                        self.engine.get_best_move,
+                        current_fen,
+                        STOCKFISH_ANALYSIS_DEPTH,
+                        20,
                     )
                     user_move = board.parse_san(record["move_san"])
                     best_move = board.parse_uci(best_move_uci)

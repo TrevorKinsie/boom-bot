@@ -9,8 +9,26 @@ primary_region = "iad" # Choose a region close to you or your users
 
 # Mount the persistent volume
 [mounts]
-  source="bot_data"
-  destination="/data"
+  source = "bot_data"
+  destination = "/data"
+
+# Keep the SQLite database and the existing bot's JSON state on the volume.
+# These defaults fit a single shared-cpu-1x Machine with 256 MB of RAM.
+[env]
+  BOT_DATA_DIR = "/data"
+  CHESS_DATABASE_PATH = "/data/chess.sqlite3"
+  STOCKFISH_PATH = "/usr/games/stockfish"
+  STOCKFISH_HASH_MB = "64"
+  STOCKFISH_THREADS = "1"
+  STOCKFISH_DEPTH = "12"
+  STOCKFISH_GAME_DEPTH = "12"
+  STOCKFISH_ANALYSIS_DEPTH = "12"
+  CHESS_ANALYSIS_INTERVAL = "15"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
+  processes = ["app"]
 
 # Optional: Define internal port if needed for health checks
 # [http_service]
