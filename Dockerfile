@@ -1,8 +1,15 @@
-# Use an official Python runtime as a parent image
-FROM python:3.13.3-alpine
+# Use an official Python runtime as a parent image.
+# Debian's multi-architecture package is available on both amd64 and arm64;
+# Alpine 3.22 does not publish a stockfish package.
+FROM python:3.13.3-slim
 
 # Stockfish is the native UCI engine used by the Chess Challenge feature.
-RUN apk add --no-cache stockfish
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends stockfish \
+    && ln -s /usr/games/stockfish /usr/local/bin/stockfish \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV STOCKFISH_PATH=/usr/games/stockfish
 
 # Set the working directory in the container
 WORKDIR /app
