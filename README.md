@@ -66,8 +66,9 @@ A Telegram bot that provides boom counts and plays Craps.
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
 | `LLM_API_KEY` | yes | – | OpenRouter API key. Without it the command replies that it isn't configured. |
-| `LLM_MODELS` | no | `deepseek/deepseek-chat-v3-0324:free,meta-llama/llama-3.3-70b-instruct:free,google/gemini-2.0-flash-001` | Comma separated model chain, tried in order until one answers. |
+| `LLM_MODELS` | no | `deepseek/deepseek-chat-v3-0324:free,meta-llama/llama-3.3-70b-instruct:free,deepseek/deepseek-chat-v3-0324,meta-llama/llama-3.3-70b-instruct,openai/gpt-4o-mini` | Comma separated model chain, tried in order until one answers. |
 | `LLM_MODEL` | no | – | Shorthand for pinning a single model (ignored if `LLM_MODELS` is set). |
+| `LLM_FOLLOW_MODEL_HINTS` | no | `true` | Retry with the replacement slug when OpenRouter's 404 names one. Set to `false` to stay on the configured chain. |
 | `LLM_TIMEOUT` | no | `30` | Per-request timeout in seconds. |
 | `LLM_REFERER` / `LLM_APP_NAME` | no | – / `boom-bot` | Optional OpenRouter attribution headers. |
 
@@ -75,5 +76,20 @@ Free-tier models are rate limited and get retired without notice, which is why
 the default is a chain rather than a single model — if the first one 404s or
 429s the bot moves to the next. When every model fails, the reason is logged at
 `WARNING` with the HTTP status and OpenRouter's error message.
+
+OpenRouter has also been moving models off the free tier, answering the `:free`
+slug with `This model is unavailable for free ... use this slug instead: <slug>`.
+With `LLM_FOLLOW_MODEL_HINTS` on, the bot immediately retries the suggested slug
+before continuing down the chain, so a retirement doesn't break `/whowouldwin`
+until the config is edited. The suggested slug is normally the **paid** version
+of the model, so those retries bill your OpenRouter credits — set
+`LLM_FOLLOW_MODEL_HINTS=false` if you only ever want free models. The default
+chain lists the paid twins explicitly for the same reason; drop them from
+`LLM_MODELS` to keep the bot free-tier only.
+
+A `No endpoints found for <model>` 404 is different: the slug exists but no
+provider will serve it for your account. That is usually credits or the data
+policy at <https://openrouter.ai/settings/privacy>, not something a config
+change here fixes.
 
 The bot should now be running and connected to Telegram.
