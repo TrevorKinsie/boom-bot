@@ -17,8 +17,8 @@ else:
     TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
     logger.info(f"Running on {platform.system()}, using TELEGRAM_TOKEN.")
 
-if not TELEGRAM_TOKEN:
-    raise ValueError("TELEGRAM_TOKEN environment variable not set!")
+# Keep imports usable for tests and maintenance commands.  `main()` still
+# refuses to start without a token.
 
 
 # --- LLM Configuration ---
@@ -61,15 +61,69 @@ LLM_REFERER = os.getenv("LLM_REFERER")
 LLM_APP_NAME = os.getenv("LLM_APP_NAME", "boom-bot")
 
 # --- Persistent Data Configuration ---
-# Use a directory within the package instead of /data for local development
-PACKAGE_DIR = Path(__file__).resolve().parent.parent  # Points to the boombot package directory
-DATA_DIR_PATH = os.path.join(PACKAGE_DIR.parent, "data")  # Create a data directory next to the boombot package
-logger.info(f"Using DATA_DIR path: {DATA_DIR_PATH}")
-DATA_DIR = Path(DATA_DIR_PATH)
-logger.info(f"Resolved DATA_DIR: {DATA_DIR.resolve()}") 
-DATA_DIR.mkdir(parents=True, exist_ok=True) 
+# Fly mounts the persistent volume at /data. Keep local development next to
+# the repository, while allowing BOT_DATA_DIR to override either location.
+PACKAGE_DIR = Path(__file__).resolve().parent.parent
+LOCAL_DATA_DIR = PACKAGE_DIR.parent / "data"
+DEFAULT_DATA_DIR = Path("/data") if Path("/data").is_dir() else LOCAL_DATA_DIR
+DATA_DIR = Path(os.getenv("BOT_DATA_DIR") or str(DEFAULT_DATA_DIR))
+logger.info(f"Using DATA_DIR path: {DATA_DIR}")
+logger.info(f"Resolved DATA_DIR: {DATA_DIR.resolve()}")
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # File paths within the persistent data directory
 ANSWERS_FILE = DATA_DIR / "question_answers.json"
 GAME_DATA_FILE = DATA_DIR / "game_data.json"
 BOOM_COUNT_FILE = DATA_DIR / "boom_count.json"
+
+# --- Chess Challenge Configuration ---
+# Chess state is deliberately kept in SQLite so the feature can run alongside
+# the existing JSON-backed games without requiring a second database service.
+CHESS_DATABASE_FILE = Path(
+    os.getenv("CHESS_DATABASE_PATH", str(DATA_DIR / "chess.sqlite3"))
+)
+STOCKFISH_PATH = os.getenv("STOCKFISH_PATH", "stockfish")
+
+try:
+    STOCKFISH_HASH_MB = int(os.getenv("STOCKFISH_HASH_MB", "64"))
+except ValueError:
+    logger.warning("STOCKFISH_HASH_MB is not an integer; falling back to 64 MB.")
+    STOCKFISH_HASH_MB = 64
+
+try:
+    STOCKFISH_THREADS = int(os.getenv("STOCKFISH_THREADS", "1"))
+except ValueError:
+    logger.warning("STOCKFISH_THREADS is not an integer; falling back to 1.")
+    STOCKFISH_THREADS = 1
+
+try:
+    STOCKFISH_DEPTH = int(os.getenv("STOCKFISH_DEPTH", "12"))
+except ValueError:
+    logger.warning("STOCKFISH_DEPTH is not an integer; falling back to 12.")
+    STOCKFISH_DEPTH = 12
+
+try:
+    STOCKFISH_GAME_DEPTH = int(
+        os.getenv("STOCKFISH_GAME_DEPTH", str(STOCKFISH_DEPTH))
+    )
+except ValueError:
+    logger.warning(
+        "STOCKFISH_GAME_DEPTH is not an integer; falling back to STOCKFISH_DEPTH."
+    )
+    STOCKFISH_GAME_DEPTH = STOCKFISH_DEPTH
+
+try:
+    STOCKFISH_ANALYSIS_DEPTH = int(
+        os.getenv("STOCKFISH_ANALYSIS_DEPTH", str(STOCKFISH_DEPTH))
+    )
+except ValueError:
+    logger.warning(
+        "STOCKFISH_ANALYSIS_DEPTH is not an integer; falling back to STOCKFISH_DEPTH."
+    )
+    STOCKFISH_ANALYSIS_DEPTH = STOCKFISH_DEPTH
+
+try:
+    CHESS_ANALYSIS_INTERVAL = float(os.getenv("CHESS_ANALYSIS_INTERVAL", "15"))
+except ValueError:
+    logger.warning("CHESS_ANALYSIS_INTERVAL is not a number; falling back to 15 seconds.")
+    CHESS_ANALYSIS_INTERVAL = 15.0

@@ -1,4 +1,5 @@
 import logging
+import os
 import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
@@ -7,9 +8,12 @@ import re  # Added import for regex
 
 logger = logging.getLogger(__name__)
 
-# Download the necessary NLTK resources
 def setup_nltk():
     """Downloads required NLTK data if not present."""
+    download_dir = os.getenv("NLTK_DATA")
+    if download_dir:
+        if download_dir not in nltk.data.path:
+            nltk.data.path.insert(0, download_dir)
     resources = ['stopwords', 'punkt', 'averaged_perceptron_tagger']
     for resource in resources:
         try:
@@ -17,14 +21,16 @@ def setup_nltk():
             logger.info(f"NLTK {resource} already downloaded.")
         except LookupError:
             logger.info(f"Downloading NLTK {resource}...")
-            nltk.download(resource, quiet=True)
+            nltk.download(resource, quiet=True, download_dir=download_dir)
             logger.info(f"NLTK {resource} downloaded.")
 
-# Initialize NLTK resources at module import time
-setup_nltk()
-
 # --- Setup NLTK resources ---
-stop_words = set(stopwords.words('english'))
+try:
+    stop_words = set(stopwords.words('english'))
+except LookupError:
+    # Importing handlers should remain safe before the optional corpus has
+    # been downloaded.  `setup_nltk()` runs during application construction.
+    stop_words = set()
 
 # --- Normalization and Subject Extraction ---
 

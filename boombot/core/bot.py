@@ -1,5 +1,6 @@
 import logging
 import os
+import asyncio
 from dotenv import load_dotenv
 # Add CallbackQueryHandler, MessageHandler, and filters imports
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
@@ -25,6 +26,19 @@ from boombot.handlers.beast_handlers import whowouldwin_command
 from boombot.handlers.deposit_handlers import frigged_deposit_command
 from boombot.core.config import TELEGRAM_TOKEN # Corrected import name
 from boombot.games.zeus.zeus import zeus, spin_button  # Import Zeus handlers
+from boombot.games.chess.analysis_service import AnalysisService
+from boombot.games.chess.database import ChessDatabase
+from boombot.games.chess.engine import StockfishEngine
+from boombot.games.chess.game_service import GameService
+from boombot.handlers.chess_handlers import (
+    callback_query_handler as chess_callback_query_handler,
+    help_command as chess_help_command,
+    move_command as chess_move_command,
+    new_game_command as chess_new_game_command,
+    reply_move_handler as chess_reply_move_handler,
+    start_command as chess_start_command,
+)
+from boombot.core.config import CHESS_ANALYSIS_INTERVAL
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -57,7 +71,22 @@ def create_application(token: str) -> Application:
     setup_nltk()
     load_answers()
 
-    application = Application.builder().token(token).build()
+    chess_database = ChessDatabase()
+    chess_engine = StockfishEngine()
+    chess_game_service = GameService(chess_database, chess_engine)
+    chess_analysis_service = AnalysisService(chess_database, chess_engine)
+
+    application = (
+        Application.builder()
+        .token(token)
+        .post_init(_start_chess_analysis)
+        .post_shutdown(_stop_chess_analysis)
+        .build()
+    )
+    application.bot_data["chess_database"] = chess_database
+    application.bot_data["chess_engine"] = chess_engine
+    application.bot_data["chess_game_service"] = chess_game_service
+    application.bot_data["chess_analysis_service"] = chess_analysis_service
 
     # Register handlers from the handlers module
     application.add_handler(CommandHandler("boom", boom_command))
@@ -83,7 +112,49 @@ def create_application(token: str) -> Application:
     application.add_handler(CommandHandler("zeus", zeus))  # Register /zeus command
     application.add_handler(CallbackQueryHandler(spin_button, pattern='^spin$'))  # Register spin button callback
 
+    # --- Chess Challenge Handlers ---
+    application.add_handler(CommandHandler("start", chess_start_command))
+    application.add_handler(CommandHandler("help", chess_help_command))
+    application.add_handler(CommandHandler("newgame", chess_new_game_command))
+    application.add_handler(CommandHandler("move", chess_move_command))
+    application.add_handler(
+        CallbackQueryHandler(
+            chess_callback_query_handler,
+            pattern=r"^(difficulty_|newgame_menu$|help$|game_options$|back_to_game$|back_to_options$|resign_check$|resign_confirm$|draw_check$|draw_confirm$)",
+        )
+    )
+    application.add_handler(
+        MessageHandler(filters.REPLY & filters.TEXT & ~filters.COMMAND, chess_reply_move_handler)
+    )
+
     return application
+
+
+async def _chess_analysis_loop(application: Application) -> None:
+    """Run the original five-second pending-game analysis queue."""
+    service = application.bot_data["chess_analysis_service"]
+    while True:
+        await service.process_pending_games()
+        await asyncio.sleep(CHESS_ANALYSIS_INTERVAL)
+
+
+async def _start_chess_analysis(application: Application) -> None:
+    application.bot_data["chess_analysis_task"] = application.create_task(
+        _chess_analysis_loop(application),
+        name="chess-analysis-queue",
+    )
+
+
+async def _stop_chess_analysis(application: Application) -> None:
+    task = application.bot_data.get("chess_analysis_task")
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+    application.bot_data["chess_engine"].quit()
+    application.bot_data["chess_database"].close()
 
 # --- Main Bot Function ---
 def main() -> None:

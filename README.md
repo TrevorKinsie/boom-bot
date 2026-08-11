@@ -18,6 +18,15 @@ A Telegram bot that provides boom counts and plays Craps.
     *   `/showgame`: Displays the current channel's game state (Point, Phase) and the user's current balance and active bets.
     *   `/resetmygame`: Resets the user's balance to the starting amount ($100) and clears their bets within the current channel.
     *   `/crapshelp`: Shows detailed rules and commands for the Craps game.
+*   **Chess Challenge (community vs Stockfish):**
+    *   `/newgame`: Select a difficulty and start a chat-scoped game.
+    *   Reply to the latest board image with SAN such as `e4`, `Nf3`, `O-O`, or
+        use `/move e4`.
+    *   The bot validates the move, replies with Stockfish's move and a
+        rendered board, and records every move durably in SQLite.
+    *   The options menu supports resigning or agreeing to a draw.
+    *   Completed games are replayed by a background analysis queue and user
+        moves receive a best-move score.
 
 ## Running the Bot
 
@@ -94,3 +103,40 @@ worth recognising in those logs:
   <https://openrouter.ai/settings/privacy>, not something a config change fixes.
 
 The bot should now be running and connected to Telegram.
+
+## Chess Challenge configuration
+
+The chess feature runs in the same Python process as the existing bot. It uses
+the native `stockfish` executable, `python-chess` for legal move handling, and
+SQLite for durable users, games, moves, and post-game analysis. The default
+data directory is `./data` for local development. On Fly, `fly.toml` sets both
+`BOT_DATA_DIR` and `CHESS_DATABASE_PATH` to `/data`, which is the mounted
+persistent volume. Set either variable to override those locations.
+
+The Stockfish process is started lazily on the first game request. Configure
+its strength with `STOCKFISH_HASH_MB`, `STOCKFISH_THREADS`, and
+`STOCKFISH_DEPTH`. `STOCKFISH_GAME_DEPTH` and `STOCKFISH_ANALYSIS_DEPTH` can
+override live-game and post-game analysis depth independently. The defaults
+use one thread, a 64 MB hash, depth 12, and a 15-second analysis interval so
+the bot remains within a small shared VM's memory budget.
+
+### Fly.io deployment
+
+The included Fly configuration pins one `shared-cpu-1x` Machine with 256 MB of
+RAM, one Stockfish thread, and the persistent `/data` volume. Keep this as a
+single Machine because SQLite volumes attach to one Machine; scaling out would
+require an external database or a replication layer.
+
+For a new app, create the volume in the app's primary region and deploy:
+
+```sh
+fly volumes create bot_data --region iad --size 1
+fly deploy
+```
+
+Skip volume creation if `bot_data` already exists. Fly's legacy free allowance
+is limited to qualifying older organizations; new organizations should expect
+usage-based billing. See [Fly pricing](https://fly.io/docs/about/pricing/),
+[Machine configuration](https://fly.io/docs/reference/configuration/), and
+[volume behavior](https://fly.io/docs/volumes/overview/) before changing the
+resource profile.
