@@ -53,17 +53,104 @@ def test_returns_content(single_model):
     assert "data" not in kwargs
 
 
-def test_falls_back_to_reasoning_when_content_empty(single_model):
-    payload = completion("", finish_reason="length")
-    payload["choices"][0]["message"]["reasoning"] = "The gorilla wins."
-    with patch.object(llm.requests, "post", return_value=make_response(payload)):
-        assert llm.get_openrouter_response("q") == "The gorilla wins."
-
-
 def test_joins_structured_content_parts(single_model):
     payload = completion([{"type": "text", "text": "One "}, {"type": "text", "text": "gorilla."}])
     with patch.object(llm.requests, "post", return_value=make_response(payload)):
         assert llm.get_openrouter_response("q") == "One gorilla."
+
+
+def test_asks_the_model_not_to_spend_the_budget_thinking(single_model):
+    """Reasoning eats the token budget and leaves `content` empty."""
+    with patch.object(llm.requests, "post", return_value=make_response(completion("Lions win!"))) as post:
+        llm.get_openrouter_response("q")
+
+    body = post.call_args.kwargs["json"]
+    assert body["reasoning"] == {"enabled": False, "exclude": True}
+    assert body["max_tokens"] >= 800
+
+
+# --- Reasoning traces must never reach the user ---
+
+def reasoning_completion(reasoning, finish_reason="stop"):
+    payload = completion("", finish_reason=finish_reason)
+    payload["choices"][0]["message"]["reasoning"] = reasoning
+    return payload
+
+
+# The trace that actually got sent to a user: cut off mid-thought because the
+# model spent all 300 tokens deliberating.
+TRUNCATED_TRACE = (
+    "Okay, the user wants a dramatic, one-line battle summary declaring a "
+    "concrete winner between 100 men and one gorilla. Let me think.\n\n"
+    "Possible phrases: \"unstoppable force,\" \"primordial power.\"\n"
+    "Yes. Make sure"
+)
+
+
+def test_truncated_reasoning_trace_is_never_returned(single_model):
+    with patch.object(llm.requests, "post", return_value=make_response(reasoning_completion(TRUNCATED_TRACE, finish_reason="length"))):
+        answer = llm.get_openrouter_response("100 men vs one gorilla?")
+
+    assert answer == llm.UNREACHABLE_REPLY
+    assert "the user wants" not in answer.lower()
+
+
+def test_truncated_reasoning_falls_through_to_the_next_model():
+    responses = [
+        make_response(reasoning_completion(TRUNCATED_TRACE, finish_reason="length")),
+        make_response(completion("The gorilla wins.")),
+    ]
+    with patch.object(llm, "LLM_MODELS", ["thinky-model", "live-model"]):
+        with patch.object(llm.requests, "post", side_effect=responses):
+            assert llm.get_openrouter_response("q") == "The gorilla wins."
+
+
+def test_salvages_the_verdict_off_a_completed_trace(single_model):
+    trace = (
+        "Okay, the user wants a dramatic one-liner. Let me think about the "
+        "matchup.\nThe gorilla has raw power, the men have numbers.\n"
+        "The gorilla's primal rage crushes all one hundred men!"
+    )
+    with patch.object(llm.requests, "post", return_value=make_response(reasoning_completion(trace))):
+        assert (
+            llm.get_openrouter_response("q")
+            == "The gorilla's primal rage crushes all one hundred men!"
+        )
+
+
+@pytest.mark.parametrize(
+    "last_line, expected",
+    [
+        ('Final answer: "The gorilla wins."', "The gorilla wins."),
+        ("**Verdict: The lions win.**", "The lions win."),
+        ("Answer - Ninjas take it.", "Ninjas take it."),
+    ],
+    ids=["final-answer-prefix", "markdown-verdict", "dash-separator"],
+)
+def test_salvaged_verdict_is_stripped_of_scaffolding(single_model, last_line, expected):
+    trace = f"Let me weigh this up.\n{last_line}"
+    with patch.object(llm.requests, "post", return_value=make_response(reasoning_completion(trace))):
+        assert llm.get_openrouter_response("q") == expected
+
+
+def test_rambling_trailing_paragraph_is_cut_to_its_last_sentence(single_model):
+    trace = "Thinking.\n" + ("I keep going on and on about the matchup. " * 30) + "The bears win."
+    with patch.object(llm.requests, "post", return_value=make_response(reasoning_completion(trace))):
+        assert llm.get_openrouter_response("q") == "The bears win."
+
+
+def test_unsalvageable_trace_is_treated_as_no_answer(single_model):
+    # One long unpunctuated run with no verdict to lift out of it.
+    trace = "so anyway " * 200
+    with patch.object(llm.requests, "post", return_value=make_response(reasoning_completion(trace))):
+        assert llm.get_openrouter_response("q") == llm.UNREACHABLE_REPLY
+
+
+def test_content_wins_over_reasoning(single_model):
+    payload = reasoning_completion("Let me think about who wins here.")
+    payload["choices"][0]["message"]["content"] = "The gorilla wins."
+    with patch.object(llm.requests, "post", return_value=make_response(payload)):
+        assert llm.get_openrouter_response("q") == "The gorilla wins."
 
 
 # --- Failure handling ---
