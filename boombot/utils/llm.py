@@ -184,12 +184,20 @@ def get_openrouter_response(question: str) -> str:
 
         # A retired model usually points at its own replacement, so try that
         # before falling further down the configured chain.
-        if LLM_FOLLOW_MODEL_HINTS and replacement and replacement not in tried:
-            logger.info(
-                f"OpenRouter suggested '{replacement}' in place of '{model}'; "
-                "trying that next."
-            )
-            pending.insert(0, replacement)
+        if replacement and replacement not in tried:
+            if LLM_FOLLOW_MODEL_HINTS:
+                logger.info(
+                    f"OpenRouter suggested '{replacement}' in place of '{model}'; "
+                    "trying that next."
+                )
+                pending.insert(0, replacement)
+            else:
+                logger.info(
+                    f"OpenRouter suggests '{replacement}' in place of '{model}'. "
+                    "Set LLM_FOLLOW_MODEL_HINTS=true to follow suggestions like "
+                    "this automatically -- note the replacement is usually the "
+                    "paid model."
+                )
 
         if pending:
             logger.warning(

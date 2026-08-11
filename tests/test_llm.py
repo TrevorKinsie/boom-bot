@@ -142,7 +142,14 @@ RETIRED = make_response(
 )
 
 
-def test_follows_suggested_slug():
+@pytest.fixture
+def follow_hints():
+    """Following slug hints is opt-in, because the replacement is usually paid."""
+    with patch.object(llm, "LLM_FOLLOW_MODEL_HINTS", True):
+        yield
+
+
+def test_follows_suggested_slug(follow_hints):
     responses = [RETIRED, make_response(completion("The gorilla wins."))]
     with patch.object(llm, "LLM_MODELS", ["deepseek/deepseek-chat-v3-0324:free"]):
         with patch.object(llm.requests, "post", side_effect=responses) as post:
@@ -154,7 +161,7 @@ def test_follows_suggested_slug():
     ]
 
 
-def test_suggested_slug_is_tried_before_the_rest_of_the_chain():
+def test_suggested_slug_is_tried_before_the_rest_of_the_chain(follow_hints):
     responses = [RETIRED, make_response(completion("Paid model answers."))]
     with patch.object(llm, "LLM_MODELS", ["deepseek/deepseek-chat-v3-0324:free", "model-z"]):
         with patch.object(llm.requests, "post", side_effect=responses) as post:
@@ -166,16 +173,16 @@ def test_suggested_slug_is_tried_before_the_rest_of_the_chain():
     ]
 
 
-def test_suggested_slug_can_be_disabled():
-    with patch.object(llm, "LLM_FOLLOW_MODEL_HINTS", False):
-        with patch.object(llm, "LLM_MODELS", ["deepseek/deepseek-chat-v3-0324:free"]):
-            with patch.object(llm.requests, "post", return_value=RETIRED) as post:
-                assert llm.get_openrouter_response("q") == llm.UNREACHABLE_REPLY
+def test_suggested_slug_is_ignored_by_default():
+    """Nothing should silently start billing the paid model."""
+    with patch.object(llm, "LLM_MODELS", ["deepseek/deepseek-chat-v3-0324:free"]):
+        with patch.object(llm.requests, "post", return_value=RETIRED) as post:
+            assert llm.get_openrouter_response("q") == llm.UNREACHABLE_REPLY
 
     assert post.call_count == 1
 
 
-def test_suggested_slug_is_not_retried_when_already_in_the_chain():
+def test_suggested_slug_is_not_retried_when_already_in_the_chain(follow_hints):
     """The hint must not make us call a model we have already ruled out."""
     with patch.object(
         llm,
@@ -203,7 +210,7 @@ def test_duplicate_models_are_only_called_once():
     "message",
     ["No endpoints found for google/gemini-2.0-flash-001.", "Rate limit exceeded", ""],
 )
-def test_errors_without_a_slug_hint_do_not_add_models(message):
+def test_errors_without_a_slug_hint_do_not_add_models(follow_hints, message):
     with patch.object(llm, "LLM_MODELS", ["model-a"]):
         response = make_response({"error": {"message": message}}, status_code=404)
         with patch.object(llm.requests, "post", return_value=response) as post:

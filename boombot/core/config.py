@@ -24,19 +24,13 @@ if not TELEGRAM_TOKEN:
 # --- LLM Configuration ---
 LLM_API_KEY = os.getenv("LLM_API_KEY")
 
-# Models are tried in order until one returns a usable answer. Free-tier models
-# on OpenRouter get rate limited and retired without notice, so keep a fallback
-# chain instead of pinning a single model. The `:free` variants are tried first
-# and their paid twins back them up, because OpenRouter has been moving models
-# off the free tier ("This model is unavailable for free ... use this slug
-# instead: <paid slug>").
-DEFAULT_LLM_MODELS = [
-    "deepseek/deepseek-chat-v3-0324:free",
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "deepseek/deepseek-chat-v3-0324",
-    "meta-llama/llama-3.3-70b-instruct",
-    "openai/gpt-4o-mini",
-]
+# `openrouter/free` is OpenRouter's free-models router: it picks a currently
+# available free model that can serve the request. Pinning individual `:free`
+# slugs is what broke the command -- they get rate limited and retired without
+# notice, and OpenRouter has been moving them to paid ("This model is
+# unavailable for free ... use this slug instead: <paid slug>"). The router
+# rides that churn out, so it is the whole default chain.
+DEFAULT_LLM_MODELS = ["openrouter/free"]
 
 # Override with a single model (LLM_MODEL) or a comma separated chain (LLM_MODELS).
 _llm_models_env = os.getenv("LLM_MODELS") or os.getenv("LLM_MODEL") or ""
@@ -45,15 +39,15 @@ if not LLM_MODELS:
     LLM_MODELS = list(DEFAULT_LLM_MODELS)
 logger.info(f"LLM model chain: {LLM_MODELS}")
 
-# When a model 404s, OpenRouter's error often names its replacement slug. Follow
-# that hint automatically so a retirement doesn't take the command down until
-# someone edits the config. Set to a falsy value to stick to the configured
-# chain (the replacement is usually a paid model).
-LLM_FOLLOW_MODEL_HINTS = os.getenv("LLM_FOLLOW_MODEL_HINTS", "true").strip().lower() not in (
-    "0",
-    "false",
-    "no",
-    "off",
+# When a model 404s, OpenRouter's error often names its replacement slug. That
+# replacement is normally the *paid* version of the model, so following it is
+# opt-in -- billing someone's credits should never be a surprise. Only useful
+# when LLM_MODELS pins specific models; the default router never needs it.
+LLM_FOLLOW_MODEL_HINTS = os.getenv("LLM_FOLLOW_MODEL_HINTS", "false").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
 )
 
 try:

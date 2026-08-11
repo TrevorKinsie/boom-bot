@@ -66,30 +66,31 @@ A Telegram bot that provides boom counts and plays Craps.
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
 | `LLM_API_KEY` | yes | – | OpenRouter API key. Without it the command replies that it isn't configured. |
-| `LLM_MODELS` | no | `deepseek/deepseek-chat-v3-0324:free,meta-llama/llama-3.3-70b-instruct:free,deepseek/deepseek-chat-v3-0324,meta-llama/llama-3.3-70b-instruct,openai/gpt-4o-mini` | Comma separated model chain, tried in order until one answers. |
+| `LLM_MODELS` | no | `openrouter/free` | Comma separated model chain, tried in order until one answers. |
 | `LLM_MODEL` | no | – | Shorthand for pinning a single model (ignored if `LLM_MODELS` is set). |
-| `LLM_FOLLOW_MODEL_HINTS` | no | `true` | Retry with the replacement slug when OpenRouter's 404 names one. Set to `false` to stay on the configured chain. |
+| `LLM_FOLLOW_MODEL_HINTS` | no | `false` | When a 404 names a replacement slug, retry it. Off by default — the replacement is normally the paid model. |
 | `LLM_TIMEOUT` | no | `30` | Per-request timeout in seconds. |
 | `LLM_REFERER` / `LLM_APP_NAME` | no | – / `boom-bot` | Optional OpenRouter attribution headers. |
 
-Free-tier models are rate limited and get retired without notice, which is why
-the default is a chain rather than a single model — if the first one 404s or
-429s the bot moves to the next. When every model fails, the reason is logged at
-`WARNING` with the HTTP status and OpenRouter's error message.
+The default is [`openrouter/free`](https://openrouter.ai/openrouter/free),
+OpenRouter's free-models router: it picks a currently available free model that
+can serve the request. Pinning individual `:free` slugs is what used to break
+this command — they get rate limited and retired without notice, and OpenRouter
+has been moving them to paid — so let the router absorb that churn instead.
+Free usage is capped at 20 requests/minute and 1,000/day (50/day until you have
+ever added $10 in credits).
 
-OpenRouter has also been moving models off the free tier, answering the `:free`
-slug with `This model is unavailable for free ... use this slug instead: <slug>`.
-With `LLM_FOLLOW_MODEL_HINTS` on, the bot immediately retries the suggested slug
-before continuing down the chain, so a retirement doesn't break `/whowouldwin`
-until the config is edited. The suggested slug is normally the **paid** version
-of the model, so those retries bill your OpenRouter credits — set
-`LLM_FOLLOW_MODEL_HINTS=false` if you only ever want free models. The default
-chain lists the paid twins explicitly for the same reason; drop them from
-`LLM_MODELS` to keep the bot free-tier only.
+`LLM_MODELS` still takes a chain if you want to pin specific models: they are
+tried in order until one answers, and when they all fail the reason is logged at
+`WARNING` with the HTTP status and OpenRouter's error message. Two 404s are
+worth recognising in those logs:
 
-A `No endpoints found for <model>` 404 is different: the slug exists but no
-provider will serve it for your account. That is usually credits or the data
-policy at <https://openrouter.ai/settings/privacy>, not something a config
-change here fixes.
+- `This model is unavailable for free ... use this slug instead: <slug>` — the
+  model moved to paid. Set `LLM_FOLLOW_MODEL_HINTS=true` to have the bot retry
+  the named slug automatically; it is off by default because that slug bills
+  your credits. Either way the suggestion is logged.
+- `No endpoints found for <model>` — the slug exists but no provider will serve
+  it for your account. Usually credits or the data policy at
+  <https://openrouter.ai/settings/privacy>, not something a config change fixes.
 
 The bot should now be running and connected to Telegram.
