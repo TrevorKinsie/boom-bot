@@ -4,6 +4,7 @@ question_answers.json
 game_data.json
 logs/error.log
 *.egg-info/
+data/
 
 # Virtual environment
 venv/

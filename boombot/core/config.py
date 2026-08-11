@@ -17,8 +17,8 @@ else:
     TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
     logger.info(f"Running on {platform.system()}, using TELEGRAM_TOKEN.")
 
-if not TELEGRAM_TOKEN:
-    raise ValueError("TELEGRAM_TOKEN environment variable not set!")
+# Keep imports usable for tests and maintenance commands.  `main()` still
+# refuses to start without a token.
 
 
 # --- LLM Configuration ---
@@ -73,3 +73,35 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 ANSWERS_FILE = DATA_DIR / "question_answers.json"
 GAME_DATA_FILE = DATA_DIR / "game_data.json"
 BOOM_COUNT_FILE = DATA_DIR / "boom_count.json"
+
+# --- Chess Challenge Configuration ---
+# Chess state is deliberately kept in SQLite so the feature can run alongside
+# the existing JSON-backed games without requiring a second database service.
+CHESS_DATABASE_FILE = Path(
+    os.getenv("CHESS_DATABASE_PATH", str(DATA_DIR / "chess.sqlite3"))
+)
+STOCKFISH_PATH = os.getenv("STOCKFISH_PATH", "stockfish")
+
+try:
+    STOCKFISH_HASH_MB = int(os.getenv("STOCKFISH_HASH_MB", "128"))
+except ValueError:
+    logger.warning("STOCKFISH_HASH_MB is not an integer; falling back to 128 MB.")
+    STOCKFISH_HASH_MB = 128
+
+try:
+    STOCKFISH_THREADS = int(os.getenv("STOCKFISH_THREADS", "2"))
+except ValueError:
+    logger.warning("STOCKFISH_THREADS is not an integer; falling back to 2.")
+    STOCKFISH_THREADS = 2
+
+try:
+    STOCKFISH_DEPTH = int(os.getenv("STOCKFISH_DEPTH", "20"))
+except ValueError:
+    logger.warning("STOCKFISH_DEPTH is not an integer; falling back to 20.")
+    STOCKFISH_DEPTH = 20
+
+try:
+    CHESS_ANALYSIS_INTERVAL = float(os.getenv("CHESS_ANALYSIS_INTERVAL", "5"))
+except ValueError:
+    logger.warning("CHESS_ANALYSIS_INTERVAL is not a number; falling back to 5 seconds.")
+    CHESS_ANALYSIS_INTERVAL = 5.0

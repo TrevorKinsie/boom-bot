@@ -61,19 +61,34 @@ def test_create_application(mock_nltk_setup):
     assert "zeus" in command_handlers
     assert command_handlers["zeus"] == frozenset({"zeus"})
 
+    assert command_handlers["start_command"] == frozenset({"start"})
+    assert command_handlers["help_command"] == frozenset({"help"})
+    assert command_handlers["new_game_command"] == frozenset({"newgame"})
+    assert command_handlers["move_command"] == frozenset({"move"})
+
     spin_handler = next((h for h in callback_handlers if h.callback.__name__ == "spin_button"), None)
     assert spin_handler is not None
     assert spin_handler.pattern.pattern == '^spin$'
 
-    # Assert message handler (photo caption)
-    assert len(message_handlers) == 1
-    message_handler = message_handlers[0]
+    chess_callback_handler = next(
+        h for h in callback_handlers if h.callback.__name__ == "callback_query_handler"
+    )
+    assert chess_callback_handler.pattern.pattern.startswith("^(difficulty_")
+
+    # Assert message handlers (photo captions plus chess move replies)
+    message_handler = next(
+        h for h in message_handlers if h.callback.__name__ == "handle_photo_caption"
+    )
     assert message_handler.callback.__name__ == "handle_photo_caption"
     # Check the type of the filter using the identified class
     assert isinstance(message_handler.filters, filters._MergedFilter)
+    chess_reply_handler = next(
+        h for h in message_handlers if h.callback.__name__ == "reply_move_handler"
+    )
+    assert isinstance(chess_reply_handler.filters, filters._MergedFilter)
 
     # Assert callback query handlers
-    assert len(callback_handlers) == 3
+    assert len(callback_handlers) >= 3
     # Find handlers by pattern or callback name for robustness
     craps_handler = next((h for h in callback_handlers if h.callback.__name__ == "craps_callback_handler"), None)
     roulette_handler = next((h for h in callback_handlers if h.callback.__name__ == "roulette_callback_handler"), None)

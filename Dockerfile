@@ -1,6 +1,9 @@
 # Use an official Python runtime as a parent image
 FROM python:3.13.3-alpine
 
+# Stockfish is the native UCI engine used by the Chess Challenge feature.
+RUN apk add --no-cache stockfish
+
 # Set the working directory in the container
 WORKDIR /app
 
