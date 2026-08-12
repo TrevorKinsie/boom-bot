@@ -16,6 +16,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Configure chess diagnostic recipients
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          CHESS_ERROR_LOG_USER_IDS: ${{ secrets.CHESS_ERROR_LOG_USER_IDS }}
+        run: |
+          if [ -n "$CHESS_ERROR_LOG_USER_IDS" ]; then
+            flyctl secrets set --app boom-bot "CHESS_ERROR_LOG_USER_IDS=$CHESS_ERROR_LOG_USER_IDS"
+          fi
       - run: flyctl deploy --remote-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

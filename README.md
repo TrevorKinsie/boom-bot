@@ -120,6 +120,21 @@ override live-game and post-game analysis depth independently. The defaults
 use one thread, a 64 MB hash, depth 12, and a 15-second analysis interval so
 the bot remains within a small shared VM's memory budget.
 
+Chess interactions carry a request ID through the Telegram handler, game
+service, SQLite repository, board renderer, Stockfish process, and background
+analysis logs. If a chess interaction fails, the initiating Telegram user
+receives the user-facing error plus a complete request-scoped `.log` document
+only when that user is present in the `CHESS_ERROR_LOG_USER_IDS` comma-separated
+runtime secret. The report includes
+the captured INFO/DEBUG trail, exception traceback, engine command/output
+tail, database operation boundary, game/FEN state, and timing without
+including the bot token. Background analysis failures remain in the normal
+application logs because there is no initiating Telegram message to reply to.
+
+The deployment workflow forwards the repository secret named
+`CHESS_ERROR_LOG_USER_IDS` to Fly.io. Leave it unset to disable Telegram
+diagnostic attachments while retaining normal application logging.
+
 ### Fly.io deployment
 
 The included Fly configuration pins one `shared-cpu-1x` Machine with 256 MB of
