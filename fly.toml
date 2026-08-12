@@ -13,7 +13,7 @@ primary_region = "iad" # Choose a region close to you or your users
   destination = "/data"
 
 # Keep the SQLite database and the existing bot's JSON state on the volume.
-# These defaults fit a single shared-cpu-1x Machine with 256 MB of RAM.
+# These defaults fit a single shared-cpu-1x Machine with 512 MB of RAM.
 [env]
   BOT_DATA_DIR = "/data"
   CHESS_DATABASE_PATH = "/data/chess.sqlite3"
@@ -27,7 +27,7 @@ primary_region = "iad" # Choose a region close to you or your users
 
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "256mb"
+  memory = "512mb"
   processes = ["app"]
 
 # Optional: Define internal port if needed for health checks

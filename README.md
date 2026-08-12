@@ -137,7 +137,7 @@ diagnostic attachments while retaining normal application logging.
 
 ### Fly.io deployment
 
-The included Fly configuration pins one `shared-cpu-1x` Machine with 256 MB of
+The included Fly configuration pins one `shared-cpu-1x` Machine with 512 MB of
 RAM, one Stockfish thread, and the persistent `/data` volume. Keep this as a
 single Machine because SQLite volumes attach to one Machine; scaling out would
 require an external database or a replication layer.

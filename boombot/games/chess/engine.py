@@ -195,17 +195,21 @@ class StockfishEngine:
                     f"Timed out waiting for Stockfish during {operation}"
                 ) from exc
             if line is None:
+                process = self._process
+                return_code = process.poll() if process else None
                 logger.error(
                     "Stockfish exited while waiting operation=%s lines_received=%s "
-                    "last_command=%r output_tail=%r pid=%s",
+                    "last_command=%r output_tail=%r pid=%s return_code=%s",
                     operation,
                     len(lines),
                     self._last_command,
                     list(self._output_tail),
-                    self._process.pid if self._process else None,
+                    process.pid if process else None,
+                    return_code,
                 )
                 raise RuntimeError(
-                    f"Stockfish exited unexpectedly during {operation}"
+                    f"Stockfish exited unexpectedly during {operation} "
+                    f"(return_code={return_code})"
                 )
             lines.append(line)
             if predicate(line):
