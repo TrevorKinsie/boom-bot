@@ -84,6 +84,39 @@ CHESS_DATABASE_FILE = Path(
 )
 STOCKFISH_PATH = os.getenv("STOCKFISH_PATH", "stockfish")
 
+
+def get_chess_error_log_user_ids() -> frozenset[int]:
+    """Return Telegram IDs allowed to receive chess diagnostic attachments.
+
+    The value is intentionally read from the environment rather than stored
+    in source control. Configure ``CHESS_ERROR_LOG_USER_IDS`` as a
+    comma-separated secret, for example ``123,456``.
+    """
+
+    raw_value = os.getenv("CHESS_ERROR_LOG_USER_IDS", "")
+    allowed_ids: set[int] = set()
+    invalid_entries = 0
+    for entry in raw_value.split(","):
+        value = entry.strip()
+        if not value:
+            continue
+        try:
+            telegram_id = int(value)
+        except ValueError:
+            invalid_entries += 1
+            continue
+        if telegram_id <= 0:
+            invalid_entries += 1
+            continue
+        allowed_ids.add(telegram_id)
+
+    if invalid_entries:
+        logger.warning(
+            "CHESS_ERROR_LOG_USER_IDS contains invalid entries count=%s",
+            invalid_entries,
+        )
+    return frozenset(allowed_ids)
+
 try:
     STOCKFISH_HASH_MB = int(os.getenv("STOCKFISH_HASH_MB", "64"))
 except ValueError:
