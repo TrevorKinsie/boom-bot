@@ -160,3 +160,35 @@ try:
 except ValueError:
     logger.warning("CHESS_ANALYSIS_INTERVAL is not a number; falling back to 15 seconds.")
     CHESS_ANALYSIS_INTERVAL = 15.0
+
+# --- Enterprise Casino Microkernel Configuration ---
+# The casino platform is persisted through an append-only event store. A
+# storage provider (JSON or SQLite) is selected at wiring time; both backends
+# implement the same port and are interchangeable through the DI container.
+CASINO_DEFAULT_STORAGE = os.getenv("CASINO_STORAGE", "sqlite").strip().lower()
+CASINO_EVENT_STORE_JSON_FILE = Path(
+    os.getenv("CASINO_EVENT_STORE_JSON", str(DATA_DIR / "casino_events.json"))
+)
+CASINO_EVENT_STORE_SQLITE_FILE = Path(
+    os.getenv("CASINO_EVENT_STORE_SQLITE", str(DATA_DIR / "casino.sqlite3"))
+)
+
+try:
+    CASINO_SNAPSHOT_THRESHOLD = int(os.getenv("CASINO_SNAPSHOT_THRESHOLD", "50"))
+except ValueError:
+    logger.warning("CASINO_SNAPSHOT_THRESHOLD is not an integer; falling back to 50.")
+    CASINO_SNAPSHOT_THRESHOLD = 50
+
+CASINO_STARTING_BALANCE = os.getenv("CASINO_STARTING_BALANCE", "100.00")
+CASINO_CURRENCY_QUANTIZATION = os.getenv("CASINO_CURRENCY_QUANTIZATION", "0.01")
+
+try:
+    ZEUS_SPIN_COST = os.getenv("ZEUS_SPIN_COST", "10.00")
+except Exception:
+    ZEUS_SPIN_COST = "10.00"
+
+try:
+    LEADERBOARD_SIZE = int(os.getenv("LEADERBOARD_SIZE", "10"))
+except ValueError:
+    logger.warning("LEADERBOARD_SIZE is not an integer; falling back to 10.")
+    LEADERBOARD_SIZE = 10

@@ -13,19 +13,16 @@ from boombot.handlers.base_handlers import (
     boom_command,
     booms_command,
     handle_photo_caption,
-    # Craps commands replaced by inline keyboard
-    start_craps_command,
-    craps_callback_handler,
-    bet_command
 )
-# Add roulette handler imports
-from boombot.handlers.roulette_handlers import start_roulette_command, roulette_callback_handler
 # Import beast handlers
 from boombot.handlers.beast_handlers import whowouldwin_command
 # Import deposit handlers
 from boombot.handlers.deposit_handlers import frigged_deposit_command
 from boombot.core.config import TELEGRAM_TOKEN # Corrected import name
-from boombot.games.zeus.zeus import zeus, spin_button  # Import Zeus handlers
+from boombot.casino.di.casino_application_context import build_casino_container
+from boombot.casino.infrastructure.telegram.casino_telegram_facade import (
+    CasinoTelegramFacade,
+)
 from boombot.games.chess.analysis_service import AnalysisService
 from boombot.games.chess.database import ChessDatabase
 from boombot.games.chess.engine import StockfishEngine
@@ -88,6 +85,11 @@ def create_application(token: str) -> Application:
     application.bot_data["chess_game_service"] = chess_game_service
     application.bot_data["chess_analysis_service"] = chess_analysis_service
 
+    # --- Enterprise Casino Microkernel wiring ---
+    casino_container = build_casino_container()
+    casino_facade = CasinoTelegramFacade(casino_container)
+    application.bot_data["casino_container"] = casino_container
+
     # Register handlers from the handlers module
     application.add_handler(CommandHandler("boom", boom_command))
     application.add_handler(CommandHandler("howmanybooms", booms_command))
@@ -100,17 +102,15 @@ def create_application(token: str) -> Application:
     # --- Deposit Handlers ---
     application.add_handler(CommandHandler("friggedthedeposit", frigged_deposit_command))
 
-    # --- Craps Game Handlers ---
-    application.add_handler(CommandHandler("craps", start_craps_command))
-    application.add_handler(CallbackQueryHandler(craps_callback_handler, pattern='^craps_')) # Pattern matches our callback data
-    application.add_handler(CommandHandler("bet", bet_command))
-    
-    # --- Roulette Game Handlers ---
-    application.add_handler(CommandHandler("roulette", start_roulette_command))
-    application.add_handler(CallbackQueryHandler(roulette_callback_handler, pattern='^roulette_'))
-
-    application.add_handler(CommandHandler("zeus", zeus))  # Register /zeus command
-    application.add_handler(CallbackQueryHandler(spin_button, pattern='^spin$'))  # Register spin button callback
+    # --- Enterprise Casino Command Handlers ---
+    application.add_handler(CommandHandler("wallet", casino_facade.wallet_command))
+    application.add_handler(CommandHandler("leaderboard", casino_facade.leaderboard_command))
+    application.add_handler(CommandHandler("resetwallet", casino_facade.reset_wallet_command))
+    application.add_handler(CommandHandler("roulette", casino_facade.roulette_command))
+    application.add_handler(CommandHandler("roulettespin", casino_facade.roulette_spin_command))
+    application.add_handler(CommandHandler("craps", casino_facade.craps_command))
+    application.add_handler(CommandHandler("crapsroll", casino_facade.craps_roll_command))
+    application.add_handler(CommandHandler("zeus", casino_facade.zeus_command))
 
     # --- Chess Challenge Handlers ---
     application.add_handler(CommandHandler("start", chess_start_command))
@@ -155,6 +155,9 @@ async def _stop_chess_analysis(application: Application) -> None:
             pass
     application.bot_data["chess_engine"].quit()
     application.bot_data["chess_database"].close()
+    casino_container = application.bot_data.get("casino_container")
+    if casino_container is not None:
+        casino_container.shutdown()
 
 # --- Main Bot Function ---
 def main() -> None:
