@@ -43,6 +43,490 @@ A Telegram bot that provides boom counts and plays Craps.
     *   `/zeus`: Spin the persistent Zeus 5x5 reel family (10 per spin, free
         spins earned on four/five-of-a-kind and jackpots).
 
+## Enterprise Casino Architecture
+
+The casino is built as a ports-and-adapters microkernel around a single
+event-sourced wallet aggregate. Telegram is only an adapter: commands enter
+through the CQRS buses, cross-cutting concerns run in a composable middleware
+pipeline, and the application service coordinates domain rules without
+knowing which event-store adapter is configured. The read side is a reactive
+projection, so leaderboard queries never rebuild wallets from the write model.
+
+```mermaid
+classDiagram
+    direction LR
+
+    namespace Presentation {
+        class CasinoTelegramFacade {
+            +wallet_command()
+            +leaderboard_command()
+            +roulette_command()
+            +craps_command()
+            +zeus_command()
+        }
+    }
+
+    namespace Composition {
+        class DependencyContainer {
+            +register()
+            +register_instance()
+            +resolve()
+            +shutdown()
+        }
+    }
+
+    namespace CQRS {
+        class ICommandBus {
+            <<interface>>
+            +dispatch(command)
+        }
+
+        class CommandBus {
+            +register_handler()
+            +add_middleware()
+            +dispatch(command)
+        }
+
+        class IQueryBus {
+            <<interface>>
+            +dispatch(query)
+        }
+
+        class QueryBus {
+            +register_handler()
+            +dispatch(query)
+        }
+
+        class ICommandHandler {
+            <<interface>>
+            +handle(command)
+        }
+
+        class IQueryHandler {
+            <<interface>>
+            +handle(query)
+        }
+
+        class AbstractCommand {
+            <<abstract>>
+            +assign_command_id()
+        }
+
+        class AbstractQuery {
+            <<abstract>>
+        }
+
+        class AbstractWageringCommand {
+            +get_user_id()
+            +get_tenant_id()
+            +get_game()
+        }
+
+        class AbstractWageringCommandHandler {
+            <<abstract>>
+            +handle(command)
+        }
+
+        class PlaceRouletteBetCommand
+        class SpinRouletteCommand
+        class PlaceCrapsBetCommand
+        class RollCrapsCommand
+        class SpinZeusCommand
+        class ResetWalletCommand
+
+        class PlaceRouletteBetCommandHandler
+        class SpinRouletteCommandHandler
+        class PlaceCrapsBetCommandHandler
+        class RollCrapsCommandHandler
+        class SpinZeusCommandHandler
+        class ResetWalletCommandHandler
+
+        class GetWalletBalanceQuery
+        class GetWalletStatsQuery
+        class GetLeaderboardQuery
+        class GetWalletBalanceQueryHandler
+        class GetWalletStatsQueryHandler
+        class GetLeaderboardQueryHandler
+    }
+
+    namespace Application {
+        class WageringApplicationService {
+            +get_wallet()
+            +place_roulette_bet()
+            +spin_roulette()
+            +place_craps_bet()
+            +roll_craps()
+            +spin_zeus()
+            +reset_wallet()
+        }
+
+        class PipelineMiddleware {
+            <<interface>>
+            +handle(command, next)
+        }
+
+        class AbstractCommandContextMiddleware {
+            <<abstract>>
+            +before_command()
+            +after_command()
+        }
+
+        class AuditTrailMiddleware
+        class IdempotencyMiddleware
+        class RetryMiddleware
+        class TenantBindingMiddleware
+    }
+
+    namespace Domain {
+        class AbstractIdentifiable {
+            <<abstract>>
+            +get_identity()
+        }
+
+        class AbstractEntity {
+            <<abstract>>
+        }
+
+        class AbstractAuditableEntity {
+            <<abstract>>
+            +mark_modified()
+        }
+
+        class AbstractVersionedEntity {
+            <<abstract>>
+            +get_version()
+            +assert_version_matches()
+        }
+
+        class AbstractAggregateRoot {
+            <<abstract>>
+            +to_state_dictionary()
+            +from_state_dictionary()
+        }
+
+        class AbstractEventSourcedAggregate {
+            <<abstract>>
+            +raise_event()
+            +replay()
+            +commit()
+        }
+
+        class Wallet {
+            +provision()
+            +debit()
+            +credit()
+            +record_wager()
+            +reset()
+            +award_free_spins()
+        }
+
+        class AbstractValueObject {
+            <<abstract>>
+        }
+
+        class Money {
+            +add()
+            +subtract()
+            +formatted()
+        }
+
+        class AggregateVersion {
+            +number()
+            +next()
+        }
+
+        class RoulettePayoutStrategy {
+            +calculate_winnings()
+        }
+
+        class CrapsBetValidationStrategy {
+            +validate()
+        }
+
+        class CrapsPayoutStrategy {
+            +calculate()
+        }
+
+        class CrapsPushStrategy {
+            +is_push()
+        }
+
+        class RandomGridFactory {
+            +generate()
+        }
+
+        class LineEvaluationStrategy {
+            +evaluate()
+        }
+
+        class PayoutCalculator {
+            +calculate()
+        }
+    }
+
+    namespace Events {
+        class AbstractDomainEvent {
+            <<abstract>>
+            +event_type()
+            +to_dictionary()
+        }
+
+        class AbstractWalletEvent {
+            <<abstract>>
+        }
+
+        class WalletCreatedEvent
+        class FundsDebitedEvent
+        class FundsCreditedEvent
+        class WalletResetEvent
+        class FreeSpinAwardedEvent
+        class FreeSpinRedeemedEvent
+        class WageredRecordedEvent
+
+        class EventTypeRegistry {
+            +register()
+            +resolve()
+        }
+    }
+
+    namespace Persistence {
+        class IEventStore {
+            <<interface>>
+            +append()
+            +load()
+            +load_all_events()
+            +save_snapshot()
+        }
+
+        class SqliteEventStoreAdapter {
+            +append()
+            +load()
+            +save_snapshot()
+        }
+
+        class JsonEventStoreAdapter {
+            +append()
+            +load()
+            +save_snapshot()
+        }
+
+        class SnapshotPolicy {
+            +should_take_snapshot()
+        }
+
+        class WalletRepository {
+            +find()
+            +load_or_provision()
+            +save()
+        }
+
+        class IGameSessionStore {
+            <<interface>>
+            +get_channel_session()
+            +save_channel_session()
+        }
+
+        class InMemoryGameSessionStore {
+            +get_channel_session()
+            +save_channel_session()
+        }
+    }
+
+    namespace EventsAndReadModel {
+        class IEventBus {
+            <<interface>>
+            +publish(event)
+            +subscribe(observer, event_type)
+        }
+
+        class IGameObserver {
+            <<interface>>
+            +notify(event)
+        }
+
+        class InProcessEventBus {
+            +publish(event)
+            +subscribe(observer, event_type)
+        }
+
+        class LeaderboardProjection {
+            +register_name()
+            +notify(event)
+            +get_leaderboard()
+        }
+
+        class PlayerStanding {
+            +get_balance()
+            +get_total_won()
+            +get_total_wagered()
+        }
+
+        class LeaderboardSnapshot {
+            +get_rankings()
+            +get_size()
+        }
+    }
+
+    namespace MultiTenancy {
+        class TenantId {
+            +value()
+        }
+
+        class TenantContext {
+            +set_current()
+            +require_current()
+        }
+
+        class ITenantResolver {
+            <<interface>>
+            +resolve(chat_identifier)
+        }
+
+        class ChatIdentifierTenantResolver {
+            +resolve(chat_identifier)
+        }
+    }
+
+    %% Composition root and presentation boundary.
+    CasinoTelegramFacade --> DependencyContainer : resolves
+    CasinoTelegramFacade --> CommandBus : dispatches commands
+    CasinoTelegramFacade --> QueryBus : dispatches queries
+    CasinoTelegramFacade --> LeaderboardProjection : registers identity
+    DependencyContainer ..> CommandBus : composes
+    DependencyContainer ..> QueryBus : composes
+    DependencyContainer ..> WageringApplicationService : injects
+    DependencyContainer ..> IEventStore : selects adapter
+    DependencyContainer ..> IEventBus : wires observer
+
+    %% CQRS write side and command pipeline.
+    ICommandBus <|.. CommandBus
+    IQueryBus <|.. QueryBus
+    CommandBus --> ICommandHandler : resolves
+    CommandBus o-- PipelineMiddleware : composes
+    PipelineMiddleware <|-- AbstractCommandContextMiddleware
+    AbstractCommandContextMiddleware <|-- AuditTrailMiddleware
+    AbstractCommandContextMiddleware <|-- IdempotencyMiddleware
+    AbstractCommandContextMiddleware <|-- RetryMiddleware
+    AbstractCommandContextMiddleware <|-- TenantBindingMiddleware
+    ICommandHandler <|.. AbstractWageringCommandHandler
+    AbstractWageringCommandHandler <|-- PlaceRouletteBetCommandHandler
+    AbstractWageringCommandHandler <|-- SpinRouletteCommandHandler
+    AbstractWageringCommandHandler <|-- PlaceCrapsBetCommandHandler
+    AbstractWageringCommandHandler <|-- RollCrapsCommandHandler
+    AbstractWageringCommandHandler <|-- SpinZeusCommandHandler
+    AbstractWageringCommandHandler <|-- ResetWalletCommandHandler
+    AbstractCommand <|-- AbstractWageringCommand
+    AbstractWageringCommand <|-- PlaceRouletteBetCommand
+    AbstractWageringCommand <|-- SpinRouletteCommand
+    AbstractWageringCommand <|-- PlaceCrapsBetCommand
+    AbstractWageringCommand <|-- RollCrapsCommand
+    AbstractWageringCommand <|-- SpinZeusCommand
+    AbstractWageringCommand <|-- ResetWalletCommand
+    PlaceRouletteBetCommand --> PlaceRouletteBetCommandHandler : routes to
+    SpinRouletteCommand --> SpinRouletteCommandHandler : routes to
+    PlaceCrapsBetCommand --> PlaceCrapsBetCommandHandler : routes to
+    RollCrapsCommand --> RollCrapsCommandHandler : routes to
+    SpinZeusCommand --> SpinZeusCommandHandler : routes to
+    ResetWalletCommand --> ResetWalletCommandHandler : routes to
+    AbstractWageringCommandHandler --> WageringApplicationService : delegates
+
+    %% CQRS read side.
+    AbstractQuery <|-- GetWalletBalanceQuery
+    AbstractQuery <|-- GetWalletStatsQuery
+    AbstractQuery <|-- GetLeaderboardQuery
+    IQueryHandler <|.. GetWalletBalanceQueryHandler
+    IQueryHandler <|.. GetWalletStatsQueryHandler
+    IQueryHandler <|.. GetLeaderboardQueryHandler
+    QueryBus --> IQueryHandler : resolves
+    GetWalletBalanceQuery --> GetWalletBalanceQueryHandler : routes to
+    GetWalletStatsQuery --> GetWalletStatsQueryHandler : routes to
+    GetLeaderboardQuery --> GetLeaderboardQueryHandler : routes to
+    GetWalletBalanceQueryHandler --> WageringApplicationService : reads
+    GetWalletStatsQueryHandler --> WageringApplicationService : reads
+    GetLeaderboardQueryHandler --> LeaderboardProjection : reads
+
+    %% Domain model and event-sourcing lifecycle.
+    AbstractIdentifiable <|-- AbstractEntity
+    AbstractEntity <|-- AbstractAuditableEntity
+    AbstractAuditableEntity <|-- AbstractVersionedEntity
+    AbstractVersionedEntity <|-- AbstractAggregateRoot
+    AbstractAggregateRoot <|-- AbstractEventSourcedAggregate
+    AbstractEventSourcedAggregate <|-- Wallet
+    AbstractValueObject <|-- Money
+    AbstractValueObject <|-- AggregateVersion
+    Wallet --> Money : protects balance
+    Wallet --> AggregateVersion : optimistic version
+    Wallet --> AbstractWalletEvent : raises and applies
+    WageringApplicationService --> WalletRepository : loads and saves
+    WageringApplicationService --> IGameSessionStore : tenant-scoped wagers
+    WageringApplicationService --> RoulettePayoutStrategy : applies rules
+    WageringApplicationService --> CrapsBetValidationStrategy : validates rules
+    WageringApplicationService --> CrapsPayoutStrategy : applies rules
+    WageringApplicationService --> CrapsPushStrategy : resolves pushes
+    WageringApplicationService --> RandomGridFactory : creates Zeus grids
+    WageringApplicationService --> LineEvaluationStrategy : evaluates paylines
+    WageringApplicationService --> PayoutCalculator : calculates rewards
+
+    %% Event stream, snapshots, and pluggable persistence.
+    AbstractDomainEvent <|-- AbstractWalletEvent
+    AbstractWalletEvent <|-- WalletCreatedEvent
+    AbstractWalletEvent <|-- FundsDebitedEvent
+    AbstractWalletEvent <|-- FundsCreditedEvent
+    AbstractWalletEvent <|-- WalletResetEvent
+    AbstractWalletEvent <|-- FreeSpinAwardedEvent
+    AbstractWalletEvent <|-- FreeSpinRedeemedEvent
+    AbstractWalletEvent <|-- WageredRecordedEvent
+    EventTypeRegistry --> AbstractDomainEvent : rehydrates
+    IEventStore <|.. SqliteEventStoreAdapter
+    IEventStore <|.. JsonEventStoreAdapter
+    SqliteEventStoreAdapter --> EventTypeRegistry : deserializes
+    JsonEventStoreAdapter --> EventTypeRegistry : deserializes
+    WalletRepository --> IEventStore : appends stream
+    WalletRepository --> SnapshotPolicy : bounds replay cost
+    WalletRepository --> Wallet : reconstitutes aggregate
+
+    %% Event publication and denormalized read model.
+    IEventBus <|.. InProcessEventBus
+    IGameObserver <|.. LeaderboardProjection
+    InProcessEventBus o-- IGameObserver : notifies
+    WageringApplicationService --> IEventBus : publishes committed events
+    LeaderboardProjection --> AbstractDomainEvent : projects
+    LeaderboardProjection o-- PlayerStanding : maintains read model
+    LeaderboardProjection --> LeaderboardSnapshot : returns
+    LeaderboardSnapshot o-- PlayerStanding : ranks
+
+    %% Tenant isolation and per-chat session state.
+    IGameSessionStore <|.. InMemoryGameSessionStore
+    ITenantResolver <|.. ChatIdentifierTenantResolver
+    ChatIdentifierTenantResolver --> TenantId : creates
+    TenantBindingMiddleware --> TenantContext : binds
+    TenantContext o-- TenantId : holds current tenant
+
+    %% Visual vocabulary: ports are contracts; adapters are replaceable I/O.
+    classDef entry fill:#4f46e5,color:#ffffff,stroke:#312e81,stroke-width:2px
+    classDef application fill:#ede9fe,stroke:#7c3aed,stroke-width:1px
+    classDef port fill:#fff7ed,stroke:#ea580c,stroke-width:2px
+    classDef domain fill:#dcfce7,stroke:#16a34a,stroke-width:1px
+    classDef event fill:#fef3c7,stroke:#d97706,stroke-width:1px
+    classDef adapter fill:#dbeafe,stroke:#2563eb,stroke-width:1px
+    classDef readmodel fill:#cffafe,stroke:#0891b2,stroke-width:1px
+    classDef crosscutting fill:#fce7f3,stroke:#db2777,stroke-width:1px
+    class CasinoTelegramFacade entry
+    class DependencyContainer,CommandBus,QueryBus,WageringApplicationService application
+    class ICommandBus,IQueryBus,ICommandHandler,IQueryHandler,PipelineMiddleware,IEventStore,IEventBus,IGameObserver,IGameSessionStore,ITenantResolver port
+    class AbstractIdentifiable,AbstractEntity,AbstractAuditableEntity,AbstractVersionedEntity,AbstractAggregateRoot,AbstractEventSourcedAggregate,Wallet,AbstractValueObject,Money,AggregateVersion,RoulettePayoutStrategy,CrapsBetValidationStrategy,CrapsPayoutStrategy,CrapsPushStrategy,RandomGridFactory,LineEvaluationStrategy,PayoutCalculator domain
+    class AbstractDomainEvent,AbstractWalletEvent,WalletCreatedEvent,FundsDebitedEvent,FundsCreditedEvent,WalletResetEvent,FreeSpinAwardedEvent,FreeSpinRedeemedEvent,WageredRecordedEvent,EventTypeRegistry event
+    class SqliteEventStoreAdapter,JsonEventStoreAdapter,SnapshotPolicy,WalletRepository,InMemoryGameSessionStore adapter
+    class InProcessEventBus,LeaderboardProjection,PlayerStanding,LeaderboardSnapshot readmodel
+    class AbstractCommandContextMiddleware,AuditTrailMiddleware,IdempotencyMiddleware,RetryMiddleware,TenantBindingMiddleware,TenantId,TenantContext,ChatIdentifierTenantResolver crosscutting
+```
+
+The diagram’s solid inheritance lines show substitutable abstractions, dashed
+dependency lines show composition-time wiring, and the event path makes the
+write/read separation explicit: `Wallet` emits immutable events, the selected
+event store persists them, and `LeaderboardProjection` builds a fast read
+model from the same stream.
+
 ## Running the Bot
 
 1.  **Clone the repository (or download the files):**
