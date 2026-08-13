@@ -7,6 +7,8 @@ boom-bot's single-process deployment and existing mounted `/data` volume.
 
 from __future__ import annotations
 
+from functools import wraps
+import logging
 import sqlite3
 import threading
 import uuid
@@ -14,6 +16,32 @@ from pathlib import Path
 from typing import Any
 
 from boombot.core.config import CHESS_DATABASE_FILE
+
+
+logger = logging.getLogger(__name__)
+
+
+def _logged_database_operation(operation: str):
+    """Log every repository boundary without exposing SQL parameters."""
+
+    def decorator(method):
+        @wraps(method)
+        def wrapped(self, *args, **kwargs):
+            logger.debug("Chess database operation started operation=%s", operation)
+            try:
+                result = method(self, *args, **kwargs)
+            except Exception:
+                logger.exception(
+                    "Chess database operation failed operation=%s",
+                    operation,
+                )
+                raise
+            logger.debug("Chess database operation completed operation=%s", operation)
+            return result
+
+        return wrapped
+
+    return decorator
 
 
 SCHEMA = """
@@ -72,35 +100,61 @@ class ChessDatabase:
 
     def __init__(self, path: Path | str = CHESS_DATABASE_FILE):
         self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.RLock()
-        self._connection = sqlite3.connect(
-            self.path,
-            check_same_thread=False,
-            timeout=30,
-        )
-        self._connection.row_factory = sqlite3.Row
-        self._connection.execute("PRAGMA foreign_keys = ON")
-        self._connection.execute("PRAGMA journal_mode = WAL")
-        self._connection.executescript(SCHEMA)
-        self._connection.commit()
+        logger.info("Opening chess database path=%s", self.path)
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self._lock = threading.RLock()
+            self._connection = sqlite3.connect(
+                self.path,
+                check_same_thread=False,
+                timeout=30,
+            )
+            self._connection.row_factory = sqlite3.Row
+            self._connection.execute("PRAGMA foreign_keys = ON")
+            self._connection.execute("PRAGMA journal_mode = WAL")
+            self._connection.executescript(SCHEMA)
+            self._connection.commit()
+            logger.info("Chess database ready path=%s", self.path)
+        except Exception:
+            logger.exception("Chess database initialization failed path=%s", self.path)
+            raise
 
+    @_logged_database_operation("close")
     def close(self) -> None:
         with self._lock:
             self._connection.close()
 
     def _row(self, query: str, params: tuple[Any, ...] = ()) -> dict[str, Any] | None:
-        with self._lock:
-            row = self._connection.execute(query, params).fetchone()
-            return dict(row) if row else None
+        try:
+            with self._lock:
+                row = self._connection.execute(query, params).fetchone()
+                return dict(row) if row else None
+        except Exception:
+            logger.exception(
+                "Chess database single-row query failed query=%s",
+                " ".join(query.split())[:240],
+            )
+            raise
 
     def _rows(self, query: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
-        with self._lock:
-            return [dict(row) for row in self._connection.execute(query, params).fetchall()]
+        try:
+            with self._lock:
+                return [
+                    dict(row)
+                    for row in self._connection.execute(query, params).fetchall()
+                ]
+        except Exception:
+            logger.exception(
+                "Chess database multi-row query failed query=%s",
+                " ".join(query.split())[:240],
+            )
+            raise
 
+    @_logged_database_operation("find_user_by_telegram_id")
     def find_user_by_telegram_id(self, telegram_id: int) -> dict[str, Any] | None:
         return self._row("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
 
+    @_logged_database_operation("create_user")
     def create_user(
         self,
         telegram_id: int,
@@ -119,6 +173,7 @@ class ChessDatabase:
             self._connection.commit()
         return self._row("SELECT * FROM users WHERE id = ?", (user_id,))  # type: ignore[return-value]
 
+    @_logged_database_operation("update_user_username")
     def update_user_username(self, user_id: str, username: str) -> None:
         with self._lock:
             self._connection.execute(
@@ -127,6 +182,7 @@ class ChessDatabase:
             )
             self._connection.commit()
 
+    @_logged_database_operation("add_score")
     def add_score(self, user_id: str, delta: int) -> None:
         with self._lock:
             self._connection.execute(
@@ -135,6 +191,7 @@ class ChessDatabase:
             )
             self._connection.commit()
 
+    @_logged_database_operation("find_active_game")
     def find_active_game(self, chat_id: int) -> dict[str, Any] | None:
         return self._row(
             """
@@ -146,6 +203,7 @@ class ChessDatabase:
             (chat_id,),
         )
 
+    @_logged_database_operation("create_game")
     def create_game(self, chat_id: int, fen: str, difficulty: int) -> dict[str, Any]:
         game_id = str(uuid.uuid4())
         with self._lock:
@@ -159,6 +217,7 @@ class ChessDatabase:
             self._connection.commit()
         return self._row("SELECT * FROM games WHERE id = ?", (game_id,))  # type: ignore[return-value]
 
+    @_logged_database_operation("update_game")
     def update_game(
         self,
         game_id: str,
@@ -189,6 +248,7 @@ class ChessDatabase:
             )
             self._connection.commit()
 
+    @_logged_database_operation("find_pending_analysis")
     def find_pending_analysis(self, limit: int = 1) -> list[dict[str, Any]]:
         return self._rows(
             """
@@ -200,6 +260,7 @@ class ChessDatabase:
             (limit,),
         )
 
+    @_logged_database_operation("create_move")
     def create_move(
         self,
         *,
@@ -223,12 +284,14 @@ class ChessDatabase:
             self._connection.commit()
         return self._row("SELECT * FROM moves WHERE id = ?", (move_id,))  # type: ignore[return-value]
 
+    @_logged_database_operation("find_moves")
     def find_moves(self, game_id: str) -> list[dict[str, Any]]:
         return self._rows(
             "SELECT * FROM moves WHERE game_id = ? ORDER BY sequence ASC",
             (game_id,),
         )
 
+    @_logged_database_operation("update_move_analysis")
     def update_move_analysis(
         self,
         move_id: str,

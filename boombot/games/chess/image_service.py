@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from io import BytesIO
+import logging
 from pathlib import Path
 
 import chess
@@ -11,6 +12,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 ASSET_DIR = Path(__file__).resolve().parent / "assets"
+logger = logging.getLogger(__name__)
 
 
 class ImageService:
@@ -31,6 +33,7 @@ class ImageService:
         font_path = ASSET_DIR / "fonts" / "Roboto-Bold.ttf"
         if font_path.exists():
             return ImageFont.truetype(str(font_path), 18)
+        logger.error("Chess board font asset is missing path=%s; using Pillow default", font_path)
         return ImageFont.load_default()
 
     @staticmethod
@@ -40,8 +43,23 @@ class ImageService:
         colors = {"w": "White", "b": "Black"}
         path = ASSET_DIR / "merida" / f"{colors[color]}{names[piece_type]}.png"
         if not path.exists():
+            logger.error(
+                "Chess piece asset is missing path=%s color=%s piece_type=%s",
+                path,
+                color,
+                piece_type,
+            )
             return None
-        return Image.open(path).convert("RGBA")
+        try:
+            return Image.open(path).convert("RGBA")
+        except Exception:
+            logger.exception(
+                "Chess piece asset could not be loaded path=%s color=%s piece_type=%s",
+                path,
+                color,
+                piece_type,
+            )
+            raise
 
     def generate_board_image(
         self,
@@ -50,6 +68,14 @@ class ImageService:
         last_move: tuple[str, str] | None = None,
         cpu_destination: str | None = None,
     ) -> bytes:
+        logger.debug(
+            "Chess board image rendering started fen=%r flipped=%s last_move=%r "
+            "cpu_destination=%r",
+            fen,
+            flipped,
+            last_move,
+            cpu_destination,
+        )
         board = chess.Board(fen)
         image = Image.new("RGBA", (self.total_size, self.total_size), self.margin_color)
         draw = ImageDraw.Draw(image)
@@ -108,7 +134,13 @@ class ImageService:
 
         output = BytesIO()
         image.convert("RGB").save(output, format="PNG")
-        return output.getvalue()
+        rendered = output.getvalue()
+        logger.info(
+            "Chess board image rendering completed bytes=%s flipped=%s",
+            len(rendered),
+            flipped,
+        )
+        return rendered
 
     @staticmethod
     def _square_name(row: int, col: int, flipped: bool) -> str:
