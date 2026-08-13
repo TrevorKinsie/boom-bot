@@ -502,81 +502,14 @@ classDiagram
     TenantBindingMiddleware --> TenantContext : binds
     TenantContext o-- TenantId : holds current tenant
 
-    %% Visual vocabulary: ports are contracts; adapters are replaceable I/O.
-    classDef entry fill:#4f46e5,color:#ffffff,stroke:#312e81,stroke-width:2px;
-    classDef application fill:#ede9fe,stroke:#7c3aed,stroke-width:1px;
-    classDef port fill:#fff7ed,stroke:#ea580c,stroke-width:2px;
-    classDef domain fill:#dcfce7,stroke:#16a34a,stroke-width:1px;
-    classDef event fill:#fef3c7,stroke:#d97706,stroke-width:1px;
-    classDef adapter fill:#dbeafe,stroke:#2563eb,stroke-width:1px;
-    classDef readmodel fill:#cffafe,stroke:#0891b2,stroke-width:1px;
-    classDef crosscutting fill:#fce7f3,stroke:#db2777,stroke-width:1px;
-    cssClass "CasinoTelegramFacade" entry;
-    cssClass "DependencyContainer" application;
-    cssClass "CommandBus" application;
-    cssClass "QueryBus" application;
-    cssClass "WageringApplicationService" application;
-    cssClass "ICommandBus" port;
-    cssClass "IQueryBus" port;
-    cssClass "ICommandHandler" port;
-    cssClass "IQueryHandler" port;
-    cssClass "PipelineMiddleware" port;
-    cssClass "IEventStore" port;
-    cssClass "IEventBus" port;
-    cssClass "IGameObserver" port;
-    cssClass "IGameSessionStore" port;
-    cssClass "ITenantResolver" port;
-    cssClass "AbstractIdentifiable" domain;
-    cssClass "AbstractEntity" domain;
-    cssClass "AbstractAuditableEntity" domain;
-    cssClass "AbstractVersionedEntity" domain;
-    cssClass "AbstractAggregateRoot" domain;
-    cssClass "AbstractEventSourcedAggregate" domain;
-    cssClass "Wallet" domain;
-    cssClass "AbstractValueObject" domain;
-    cssClass "Money" domain;
-    cssClass "AggregateVersion" domain;
-    cssClass "RoulettePayoutStrategy" domain;
-    cssClass "CrapsBetValidationStrategy" domain;
-    cssClass "CrapsPayoutStrategy" domain;
-    cssClass "CrapsPushStrategy" domain;
-    cssClass "RandomGridFactory" domain;
-    cssClass "LineEvaluationStrategy" domain;
-    cssClass "PayoutCalculator" domain;
-    cssClass "AbstractDomainEvent" event;
-    cssClass "AbstractWalletEvent" event;
-    cssClass "WalletCreatedEvent" event;
-    cssClass "FundsDebitedEvent" event;
-    cssClass "FundsCreditedEvent" event;
-    cssClass "WalletResetEvent" event;
-    cssClass "FreeSpinAwardedEvent" event;
-    cssClass "FreeSpinRedeemedEvent" event;
-    cssClass "WageredRecordedEvent" event;
-    cssClass "EventTypeRegistry" event;
-    cssClass "SqliteEventStoreAdapter" adapter;
-    cssClass "JsonEventStoreAdapter" adapter;
-    cssClass "SnapshotPolicy" adapter;
-    cssClass "WalletRepository" adapter;
-    cssClass "InMemoryGameSessionStore" adapter;
-    cssClass "InProcessEventBus" readmodel;
-    cssClass "LeaderboardProjection" readmodel;
-    cssClass "PlayerStanding" readmodel;
-    cssClass "LeaderboardSnapshot" readmodel;
-    cssClass "AbstractCommandContextMiddleware" crosscutting;
-    cssClass "AuditTrailMiddleware" crosscutting;
-    cssClass "IdempotencyMiddleware" crosscutting;
-    cssClass "RetryMiddleware" crosscutting;
-    cssClass "TenantBindingMiddleware" crosscutting;
-    cssClass "TenantId" crosscutting;
-    cssClass "TenantContext" crosscutting;
-    cssClass "ChatIdentifierTenantResolver" crosscutting;
 ```
 
-The diagram’s solid inheritance lines show substitutable abstractions, dashed
-dependency lines show composition-time wiring, and the event path makes the
-write/read separation explicit: `Wallet` emits immutable events, the selected
-event store persists them, and `LeaderboardProjection` builds a fast read
-model from the same stream.
+The diagram’s namespaces show the platform boundaries, while solid inheritance
+lines show substitutable abstractions and dashed dependency lines show
+composition-time wiring. The event path makes the write/read separation
+explicit: `Wallet` emits immutable events, the selected event store persists
+them, and `LeaderboardProjection` builds a fast read model from the same
+stream.
 
 ## Running the Bot
 
