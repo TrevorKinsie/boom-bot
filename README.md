@@ -27,6 +27,21 @@ A Telegram bot that provides boom counts and plays Craps.
     *   The options menu supports resigning or agreeing to a draw.
     *   Completed games are replayed by a background analysis queue and user
         moves receive a best-move score.
+*   **Enterprise Casino Microkernel (unified, event-sourced wallet):**
+    *   One persistent wallet per player shared across all games. State is
+        stored as an append-only domain-event stream (SQLite by default,
+        switchable to JSON).
+    *   `/wallet`: Show your unified balance, free spins, and cumulative stats.
+    *   `/leaderboard`: Show the top players ranked by balance.
+    *   `/resetwallet`: Restore your balance to the starting amount.
+    *   `/roulette <type> [number] <amount>`: Place a roulette wager, e.g.
+        `/roulette red 10`, `/roulette straight 7 10`.
+    *   `/roulettespin`: Spin the wheel and settle this chat's roulette wagers.
+    *   `/craps <type> <amount>`: Place a craps wager, e.g.
+        `/craps pass_line 10`, `/craps any_seven 5`.
+    *   `/crapsroll`: Roll the dice and settle this chat's craps wagers.
+    *   `/zeus`: Spin the persistent Zeus 5x5 reel family (10 per spin, free
+        spins earned on four/five-of-a-kind and jackpots).
 
 ## Running the Bot
 
@@ -103,6 +118,25 @@ worth recognising in those logs:
   <https://openrouter.ai/settings/privacy>, not something a config change fixes.
 
 The bot should now be running and connected to Telegram.
+
+## Enterprise Casino configuration
+
+The casino is an event-sourced, CQRS subsystem with a single persistent wallet
+per player shared across Roulette, Craps, and Zeus. Player state is stored as
+an append-only domain-event stream and reconstructed on demand; a leaderboard
+read model is maintained reactively from published events.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `CASINO_STORAGE` | `sqlite` | Backing event store: `sqlite` or `json`. |
+| `CASINO_EVENT_STORE_SQLITE` | `<DATA_DIR>/casino.sqlite3` | SQLite event store path. |
+| `CASINO_EVENT_STORE_JSON` | `<DATA_DIR>/casino_events.json` | JSON event log path when `CASINO_STORAGE=json`. |
+| `CASINO_SNAPSHOT_THRESHOLD` | `50` | Events per aggregate before a compaction snapshot. |
+| `CASINO_STARTING_BALANCE` | `100.00` | Initial wallet balance for new players. |
+| `ZEUS_SPIN_COST` | `10.00` | Cost of a paid Zeus spin. |
+
+On Fly the event store lives under the persistent `/data` volume via
+`BOT_DATA_DIR`, alongside the chess SQLite database.
 
 ## Chess Challenge configuration
 
