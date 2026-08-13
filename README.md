@@ -512,13 +512,64 @@ classDiagram
     classDef readmodel fill:#cffafe,stroke:#0891b2,stroke-width:1px
     classDef crosscutting fill:#fce7f3,stroke:#db2777,stroke-width:1px
     class CasinoTelegramFacade entry
-    class DependencyContainer,CommandBus,QueryBus,WageringApplicationService application
-    class ICommandBus,IQueryBus,ICommandHandler,IQueryHandler,PipelineMiddleware,IEventStore,IEventBus,IGameObserver,IGameSessionStore,ITenantResolver port
-    class AbstractIdentifiable,AbstractEntity,AbstractAuditableEntity,AbstractVersionedEntity,AbstractAggregateRoot,AbstractEventSourcedAggregate,Wallet,AbstractValueObject,Money,AggregateVersion,RoulettePayoutStrategy,CrapsBetValidationStrategy,CrapsPayoutStrategy,CrapsPushStrategy,RandomGridFactory,LineEvaluationStrategy,PayoutCalculator domain
-    class AbstractDomainEvent,AbstractWalletEvent,WalletCreatedEvent,FundsDebitedEvent,FundsCreditedEvent,WalletResetEvent,FreeSpinAwardedEvent,FreeSpinRedeemedEvent,WageredRecordedEvent,EventTypeRegistry event
-    class SqliteEventStoreAdapter,JsonEventStoreAdapter,SnapshotPolicy,WalletRepository,InMemoryGameSessionStore adapter
-    class InProcessEventBus,LeaderboardProjection,PlayerStanding,LeaderboardSnapshot readmodel
-    class AbstractCommandContextMiddleware,AuditTrailMiddleware,IdempotencyMiddleware,RetryMiddleware,TenantBindingMiddleware,TenantId,TenantContext,ChatIdentifierTenantResolver crosscutting
+    class DependencyContainer application
+    class CommandBus application
+    class QueryBus application
+    class WageringApplicationService application
+    class ICommandBus port
+    class IQueryBus port
+    class ICommandHandler port
+    class IQueryHandler port
+    class PipelineMiddleware port
+    class IEventStore port
+    class IEventBus port
+    class IGameObserver port
+    class IGameSessionStore port
+    class ITenantResolver port
+    class AbstractIdentifiable domain
+    class AbstractEntity domain
+    class AbstractAuditableEntity domain
+    class AbstractVersionedEntity domain
+    class AbstractAggregateRoot domain
+    class AbstractEventSourcedAggregate domain
+    class Wallet domain
+    class AbstractValueObject domain
+    class Money domain
+    class AggregateVersion domain
+    class RoulettePayoutStrategy domain
+    class CrapsBetValidationStrategy domain
+    class CrapsPayoutStrategy domain
+    class CrapsPushStrategy domain
+    class RandomGridFactory domain
+    class LineEvaluationStrategy domain
+    class PayoutCalculator domain
+    class AbstractDomainEvent event
+    class AbstractWalletEvent event
+    class WalletCreatedEvent event
+    class FundsDebitedEvent event
+    class FundsCreditedEvent event
+    class WalletResetEvent event
+    class FreeSpinAwardedEvent event
+    class FreeSpinRedeemedEvent event
+    class WageredRecordedEvent event
+    class EventTypeRegistry event
+    class SqliteEventStoreAdapter adapter
+    class JsonEventStoreAdapter adapter
+    class SnapshotPolicy adapter
+    class WalletRepository adapter
+    class InMemoryGameSessionStore adapter
+    class InProcessEventBus readmodel
+    class LeaderboardProjection readmodel
+    class PlayerStanding readmodel
+    class LeaderboardSnapshot readmodel
+    class AbstractCommandContextMiddleware crosscutting
+    class AuditTrailMiddleware crosscutting
+    class IdempotencyMiddleware crosscutting
+    class RetryMiddleware crosscutting
+    class TenantBindingMiddleware crosscutting
+    class TenantId crosscutting
+    class TenantContext crosscutting
+    class ChatIdentifierTenantResolver crosscutting
 ```
 
 The diagram’s solid inheritance lines show substitutable abstractions, dashed
