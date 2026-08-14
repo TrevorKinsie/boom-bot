@@ -14,6 +14,7 @@ event bus.
 
 from __future__ import annotations
 
+import logging
 import random
 from typing import Any
 
@@ -58,6 +59,8 @@ from boombot.casino.zeus.domain.reel import (
     ReelGrid,
     ZEUS_SYMBOLS,
 )
+
+logger = logging.getLogger(__name__)
 
 COME_OUT_PHASE = 1
 POINT_PHASE = 2
@@ -112,9 +115,8 @@ class WageringApplicationService:
 
     # --- Wallet access ---
     def get_wallet(self, user_id: str) -> Wallet:
-        wallet = self._wallet_repository.find(user_id)
-        if wallet is None:
-            wallet = self._wallet_repository.load_or_provision(user_id)
+        wallet = self._wallet_repository.load_or_provision(user_id)
+        if wallet.has_uncommitted_events():
             self._flush(wallet)
         return wallet
 
@@ -134,9 +136,25 @@ class WageringApplicationService:
 
     def _flush(self, wallet: Wallet) -> None:
         staged = wallet.get_uncommitted_events()
+        if not staged:
+            return
+        # Persist first for durability — events are durably committed.
+        # Publication to read-model observers runs after the commit; if a
+        # subscriber raises, the error is logged but does not roll back the
+        # persisted event log (the read model can be rebuilt from the store).
         self._wallet_repository.save(wallet)
         for event in staged:
-            self._event_bus.publish(event)
+            try:
+                self._event_bus.publish(event)
+            except Exception as exc:  # noqa: BLE001 - log, don't crash the user
+                logger.error(
+                    "Event bus publication failed for %s on aggregate %s; "
+                    "event is persisted but the read model may be inconsistent. %s",
+                    event.event_type(),
+                    wallet.get_identity(),
+                    exc,
+                    exc_info=exc,
+                )
 
     def _parse_amount(self, amount_str: str) -> Money:
         try:
@@ -340,7 +358,11 @@ class WageringApplicationService:
             return COME_OUT_PHASE, None
         if roll_sum in (point, 7):
             return COME_OUT_PHASE, None
-# --- Zeus ---
+        # A non-deciding roll (neither the point nor a seven) keeps the
+        # table in the point phase, preserving the established point.
+        return POINT_PHASE, point
+
+    # --- Zeus ---
     def spin_zeus(self, user_id: str) -> str:
         """Charge the user and spin the Zeus reel family."""
         wallet = self.get_wallet(user_id)
@@ -390,4 +412,3 @@ class WageringApplicationService:
         wallet.reset(self._starting_balance)
         self._flush(wallet)
         return f"Balance reset to {self._starting_balance.formatted()}."
-        return POINT_PHASE, point
