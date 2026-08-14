@@ -1,0 +1,20 @@
+[package]
+name = "boom-atomic-logic"
+version = "0.1.0"
+edition = "2021"
+description = "PURE atomic logic primitives for the boom-bot JVM decision engine"
+license = "MIT"
+authors = ["boom-bot"]
+
+# The crate is intentionally dependency-free (stdlib only) so that the atomic
+# logic layer can be compiled on any target with a Rust toolchain and no
+# network access. All randomness is derived from a caller-supplied seed through
+# a pure splitmix64 mixer -- there is no global entropy source and no I/O.
+
+[lib]
+name = "atomic_logic"
+path = "src/lib.rs"
+
+[[bin]]
+name = "atomic_cli"
+path = "src/main.rs"

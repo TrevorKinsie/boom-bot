@@ -192,3 +192,49 @@ try:
 except ValueError:
     logger.warning("LEADERBOARD_SIZE is not an integer; falling back to 10.")
     LEADERBOARD_SIZE = 10
+
+# --- JVM Decision Engine Configuration ---
+# The decision fabric delegates outcome decisions to the JVM decision engine,
+# which in turn asks the Rust atomic-logic layer for pure atomic randomness.
+# The Java middleware is a single process (../../decision-engine) built by
+# `decision-engine/build.sh` into build/jvm-decision-engine.jar alongside the
+# optional Rust atomic binary (build/atomic_cli).
+REPO_ROOT = PACKAGE_DIR.parent
+DECISION_ENGINE_DIR = REPO_ROOT / "decision-engine"
+DECISION_ENGINE_BUILD_DIR = DECISION_ENGINE_DIR / "build"
+
+DECISION_ENGINE_JAR = Path(
+    os.getenv("DECISION_ENGINE_JAR", str(DECISION_ENGINE_BUILD_DIR / "jvm-decision-engine.jar"))
+)
+DECISION_ENGINE_RUST_BIN = Path(
+    os.getenv("DECISION_ENGINE_RUST_BIN", str(DECISION_ENGINE_BUILD_DIR / "atomic_cli"))
+)
+
+# Mode selects which engine implementation is wired as the primary provider:
+#   * "jvm"        - always delegate to the JVM engine (jar must be present)
+#   * "reference"  - always use the in-process reference implementation
+#   * "auto"       - use the JVM engine when its jar is present, else reference
+DECISION_ENGINE_MODE = os.getenv("DECISION_ENGINE_MODE", "auto").strip().lower()
+if DECISION_ENGINE_MODE not in {"auto", "jvm", "reference"}:
+    logger.warning(
+        "DECISION_ENGINE_MODE=%r is invalid; falling back to 'auto'.",
+        DECISION_ENGINE_MODE,
+    )
+    DECISION_ENGINE_MODE = "auto"
+
+try:
+    DECISION_ENGINE_TIMEOUT_SECONDS = float(
+        os.getenv("DECISION_ENGINE_TIMEOUT_SECONDS", "5")
+    )
+except ValueError:
+    logger.warning(
+        "DECISION_ENGINE_TIMEOUT_SECONDS is not a number; falling back to 5 seconds."
+    )
+    DECISION_ENGINE_TIMEOUT_SECONDS = 5.0
+
+logger.info(
+    "JVM decision engine configured: mode=%s jar=%s rust=%s",
+    DECISION_ENGINE_MODE,
+    DECISION_ENGINE_JAR,
+    DECISION_ENGINE_RUST_BIN,
+)

@@ -22,6 +22,10 @@ from boombot.core.config import (
     CASINO_EVENT_STORE_SQLITE_FILE,
     CASINO_SNAPSHOT_THRESHOLD,
     CASINO_STARTING_BALANCE,
+    DECISION_ENGINE_JAR,
+    DECISION_ENGINE_MODE,
+    DECISION_ENGINE_RUST_BIN,
+    DECISION_ENGINE_TIMEOUT_SECONDS,
     ZEUS_SPIN_COST,
 )
 from boombot.casino.application.bus.command_bus import CommandBus
@@ -36,6 +40,14 @@ from boombot.casino.application.pipeline.middleware import (
     IdempotencyMiddleware,
     RetryMiddleware,
     TenantBindingMiddleware,
+)
+from boombot.casino.decisionengine.application.decision_service import DecisionService
+from boombot.casino.decisionengine.infrastructure.decision_engine_port import IDecisionEngine
+from boombot.casino.decisionengine.infrastructure.jvm_decision_engine_gateway import (
+    JvmDecisionEngineGateway,
+)
+from boombot.casino.decisionengine.infrastructure.reference_decision_engine import (
+    ReferenceDecisionEngine,
 )
 from boombot.casino.di.dependency_container import DependencyContainer
 from boombot.casino.infrastructure.eventsourcing.event_store import IEventStore, SnapshotPolicy
@@ -79,6 +91,19 @@ def _create_event_store(container: DependencyContainer) -> IEventStore:
     return SqliteEventStoreAdapter(Path(CASINO_EVENT_STORE_SQLITE_FILE), registry)
 
 
+def _build_primary_decision_engine(container: DependencyContainer) -> IDecisionEngine:
+    """Select the primary decision provider according to DECISION_ENGINE_MODE.
+
+    * ``jvm`` - always the JVM decision engine (jar must be present).
+    * ``reference`` - always the in-process reference implementation.
+    * ``auto`` - the JVM engine when its jar is present, else the reference
+      implementation (the DecisionService degrades if the engine is absent).
+    """
+    if DECISION_ENGINE_MODE == "reference":
+        return ReferenceDecisionEngine()
+    return container.resolve(JvmDecisionEngineGateway)
+
+
 def build_casino_container() -> DependencyContainer:
     """Construct and return the fully wired casino :class:`DependencyContainer`."""
     container = DependencyContainer()
@@ -115,6 +140,30 @@ def build_casino_container() -> DependencyContainer:
         singleton=True,
     )
 
+    # --- Decision engine ---
+    container.register(
+        JvmDecisionEngineGateway,
+        lambda c: JvmDecisionEngineGateway(
+            jar_path=str(DECISION_ENGINE_JAR),
+            rust_bin=str(DECISION_ENGINE_RUST_BIN)
+            if DECISION_ENGINE_RUST_BIN.exists()
+            else None,
+            timeout_seconds=DECISION_ENGINE_TIMEOUT_SECONDS,
+        ),
+        singleton=True,
+    )
+    container.register(
+        IDecisionEngine, _build_primary_decision_engine, singleton=True
+    )
+    container.register(
+        DecisionService,
+        lambda c: DecisionService(
+            primary=c.resolve(IDecisionEngine),
+            fallback=ReferenceDecisionEngine(),
+        ),
+        singleton=True,
+    )
+
     # --- Application service ---
     container.register(
         WageringApplicationService,
@@ -124,6 +173,7 @@ def build_casino_container() -> DependencyContainer:
             c.resolve(IGameSessionStore),
             starting_balance=Money(CASINO_STARTING_BALANCE),
             zeus_spin_cost=Money(ZEUS_SPIN_COST),
+            decision_service=c.resolve(DecisionService),
         ),
         singleton=True,
     )

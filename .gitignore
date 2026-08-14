@@ -20,6 +20,10 @@ build/
 *.py[cod]
 *$py.class
 
+# Rust (decision-engine atomic logic)
+target/
+Cargo.lock
+
 # Unit test / coverage reports
 .coverage
 htmlcov/

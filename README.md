@@ -42,6 +42,10 @@ A Telegram bot that provides boom counts and plays Craps.
     *   `/crapsroll`: Roll the dice and settle this chat's craps wagers.
     *   `/zeus`: Spin the persistent Zeus 5x5 reel family (10 per spin, free
         spins earned on four/five-of-a-kind and jackpots).
+    *   Every game outcome — the roulette pocket, the craps dice, the Zeus reel
+        grid — is a *decision* rendered by the **JVM Decision Engine**, which
+        delegates the pure atomic randomness down to Rust. See
+        [JVM Decision Engine](#jvm-decision-engine).
 
 ## Enterprise Casino Architecture
 
@@ -586,6 +590,46 @@ worth recognising in those logs:
   <https://openrouter.ai/settings/privacy>, not something a config change fixes.
 
 The bot should now be running and connected to Telegram.
+
+## JVM Decision Engine
+
+Game outcomes are decisions, and decisions belong to the **JVM Decision Engine**
+(`decision-engine/`). The wagering application service builds a `DecisionRequest`
+and routes it through a decision fabric:
+
+```
+Python application service
+        │  DecisionRequest {kind, seed, tenant}
+        ▼
+JVM Decision Engine  ────────────────  Java middleware
+        │                                 (rules + strategy live here)
+        │  spawns atomic_cli
+        ▼
+Rust Atomic Logic  ───────────────────  PURE atomic logic
+                                               splitmix64 + uniform primitives
+```
+
+The fabric is wired through the DI container (`DECISION_ENGINE_MODE`). When the
+JVM engine is present it is engaged — production spins delegate down to it, and
+it in turn delegates the raw randomness to the compiled Rust binary. When the
+engine is absent the fabric degrades to an in-process reference provider that
+produces the same uniform distribution.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `DECISION_ENGINE_MODE` | `auto` | `auto`, `jvm`, or `reference`. |
+| `DECISION_ENGINE_JAR` | `<repo>/decision-engine/build/jvm-decision-engine.jar` | JVM engine jar path. |
+| `DECISION_ENGINE_RUST_BIN` | `<repo>/decision-engine/build/atomic_cli` | Rust atomic-logic binary path. |
+| `DECISION_ENGINE_TIMEOUT_SECONDS` | `5` | Per-decision child-process timeout. |
+
+Build it (requires a JDK 17+ and, for the Rust path, `cargo`):
+
+```bash
+cd decision-engine && ./build.sh
+```
+
+The Docker image ships the toolchain and builds the engine as part of its image,
+so `mode=auto` engages it in production automatically.
 
 ## Enterprise Casino configuration
 
