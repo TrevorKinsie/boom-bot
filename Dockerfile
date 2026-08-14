@@ -4,12 +4,22 @@
 FROM python:3.13.3-slim
 
 # Stockfish is the native UCI engine used by the Chess Challenge feature.
+# openjdk-17-jdk-headless + rustc/cargo are the toolchain for the JVM Decision
+# Engine: the decision fabric delegates game outcomes to the JVM, which asks
+# the Rust atomic-logic layer for pure randomness.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends stockfish \
+    && apt-get install -y --no-install-recommends \
+        stockfish \
+        openjdk-17-jdk-headless \
+        rustc \
+        cargo \
     && ln -s /usr/games/stockfish /usr/local/bin/stockfish \
     && rm -rf /var/lib/apt/lists/*
 
 ENV STOCKFISH_PATH=/usr/games/stockfish
+
+# The JVM decision engine ships with the container (mode=auto engages it).
+ENV DECISION_ENGINE_MODE=auto
 
 # Set the working directory in the container
 WORKDIR /app
@@ -29,5 +39,8 @@ COPY . .
 
 # Install the package in development mode
 RUN pip install -e .
+
+# Compile the JVM decision engine (jar + Rust atomic_cli binary)
+RUN ./decision-engine/build.sh
 
 CMD ["python", "main.py"]

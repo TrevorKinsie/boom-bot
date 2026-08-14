@@ -11,6 +11,11 @@ import pytest
 from boombot.casino.application.bus.command_bus import CommandBus
 from boombot.casino.application.bus.query_bus import QueryBus
 from boombot.casino.application.event.event_bus import IEventBus
+from boombot.casino.decisionengine.application.decision_service import DecisionService
+from boombot.casino.decisionengine.infrastructure.decision_engine_port import IDecisionEngine
+from boombot.casino.decisionengine.infrastructure.jvm_decision_engine_gateway import (
+    JvmDecisionEngineGateway,
+)
 from boombot.casino.di.casino_application_context import build_casino_container
 from boombot.casino.infrastructure.eventsourcing.event_store import IEventStore
 from boombot.casino.reporting.application.leaderboard_query import GetLeaderboardQuery
@@ -48,6 +53,9 @@ class TestCompositionRoot:
         assert container.resolve(QueryBus) is not None
         assert container.resolve(IEventBus) is not None
         assert container.resolve(LeaderboardProjection) is not None
+        assert container.resolve(IDecisionEngine) is not None
+        assert container.resolve(JvmDecisionEngineGateway) is not None
+        assert container.resolve(DecisionService) is not None
 
     def test_singletons_are_shared(self, container):
         assert container.resolve(IEventBus) is container.resolve(IEventBus)

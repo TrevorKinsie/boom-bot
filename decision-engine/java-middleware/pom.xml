@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Maven build for the JVM decision engine (Java middleware).
+
+  Note: the canonical, toolchain-only build is `./build.sh` (javac + jar +
+  cargo) so the engine compiles offline with nothing but a JDK and the Rust
+  toolchain. This pom is provided for teams that prefer Maven; the
+  exec-maven-plugin shells out to the Rust crate so the jar still ships with
+  the compiled atomic_cli alongside it.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.boombot</groupId>
+    <artifactId>jvm-decision-engine</artifactId>
+    <version>0.1.0</version>
+    <packaging>jar</packaging>
+
+    <name>boom-bot JVM Decision Engine</name>
+    <description>Java middleware of the boom-bot decision fabric; asks Rust for pure atomic logic.</description>
+
+    <properties>
+        <maven.compiler.release>17</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <build>
+        <finalName>jvm-decision-engine</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.1</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <mainClass>com.boombot.decisionengine.Main</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.2.0</version>
+                <executions>
+                    <execution>
+                        <id>build-rust-atomic-logic</id>
+                        <phase>prepare-package</phase>
+                        <goals><goal>exec</goal></goals>
+                        <configuration>
+                            <executable>cargo</executable>
+                            <workingDirectory>${project.basedir}/../rust-atomic-logic</workingDirectory>
+                            <arguments><argument>build</argument><argument>--release</argument></arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

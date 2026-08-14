@@ -18,6 +18,8 @@ import random
 from typing import Any
 
 from boombot.casino.application.event.event_bus import IEventBus
+from boombot.casino.decisionengine.application.decision_service import DecisionService
+from boombot.casino.decisionengine.domain.decision import DecisionKind
 from boombot.casino.shared.exceptions import (
     BetExceedsBalanceException,
     InvalidBetException,
@@ -53,6 +55,8 @@ from boombot.casino.zeus.domain.reel import (
     PayoutCalculator,
     PayoutTable,
     RandomGridFactory,
+    ReelGrid,
+    ZEUS_SYMBOLS,
 )
 
 COME_OUT_PHASE = 1
@@ -90,12 +94,16 @@ class WageringApplicationService:
         session_store: IGameSessionStore,
         starting_balance: Money | None = None,
         zeus_spin_cost: Money | None = None,
+        decision_service: DecisionService | None = None,
     ) -> None:
         self._wallet_repository = wallet_repository
         self._event_bus = event_bus
         self._session_store = session_store
         self._starting_balance = starting_balance or Money("100.00")
         self._zeus_spin_cost = zeus_spin_cost or Money("10.00")
+        # The decision fabric renders every game outcome. When absent the
+        # service draws outcomes directly (legacy behaviour preserved).
+        self._decision_service = decision_service
         self._craps_validation_strategy = CrapsBetValidationStrategy()
         self._roulette_payout_strategy = RoulettePayoutStrategy()
         self._grid_factory = RandomGridFactory()
@@ -145,6 +153,50 @@ class WageringApplicationService:
                 f"Insufficient balance {wallet.get_balance().formatted()} "
                 f"for wager {amount.formatted()}."
             )
+
+    # --- Decision delegation ---
+    # Every game outcome is a *decision* rendered by the decision fabric. The
+    # fabric routes each decision through the JVM decision engine (which asks
+    # the Rust atomic-logic layer for pure randomness) and falls back to the
+    # in-process reference implementation when the engine is unavailable. When
+    # no decision service is wired (legacy construction) outcomes are drawn
+    # directly, preserving prior behaviour exactly.
+    def _decide_roulette_pocket(self, tenant_id: str) -> object:
+        """Return the winning pocket (an ``int`` or the string ``"00"``)."""
+        if self._decision_service is None:
+            return random.choice([0, "00"] + list(range(1, 37)))
+        decision = self._decision_service.decide(
+            DecisionKind.ROULETTE_SPIN, context={"tenant": tenant_id}
+        )
+        return decision.get("pocket")
+
+    def _decide_craps_roll(self, tenant_id: str) -> tuple[int, int]:
+        """Return the two craps die faces, each in ``1..=6``."""
+        if self._decision_service is None:
+            return random.randint(1, 6), random.randint(1, 6)
+        decision = self._decision_service.decide(
+            DecisionKind.CRAPS_ROLL, context={"tenant": tenant_id}
+        )
+        return int(decision.get("die1")), int(decision.get("die2"))
+
+    def _decide_zeus_grid(self, user_id: str) -> ReelGrid:
+        """Return a fully spun 5x5 Zeus reel grid from the decision fabric."""
+        if self._decision_service is None:
+            return self._grid_factory.generate(5, 5)
+        decision = self._decision_service.decide(
+            DecisionKind.ZEUS_SPIN, context={"user": user_id}
+        )
+        symbols = decision.get("symbols")
+        rows = int(decision.get("rows", 5))
+        cols = int(decision.get("cols", 5))
+        if not symbols or len(symbols) != rows * cols:
+            raise InvalidBetException("Decision fabric returned a malformed Zeus grid.")
+        grid_data = [
+            [ZEUS_SYMBOLS[int(symbols[row * cols + col])] for col in range(cols)]
+            for row in range(rows)
+        ]
+        return ReelGrid(rows, cols, grid_data)
+
 # --- Roulette ---
     def place_roulette_bet(
         self,
@@ -179,7 +231,7 @@ class WageringApplicationService:
         bets = session.get("roulette_bets", {})
         if not bets:
             return "No bets placed for this roulette spin."
-        result_number = random.choice([0, "00"] + list(range(1, 37)))
+        result_number = self._decide_roulette_pocket(tenant_id)
         result = RouletteResult(result_number)
         summary_lines = [f"The wheel landed on pocket {result_number}."]
         for user_id, user_bets in bets.items():
@@ -246,8 +298,7 @@ class WageringApplicationService:
         bets = session.get("craps_bets", {})
         if not bets:
             return "No bets placed for this craps roll."
-        die1 = random.randint(1, 6)
-        die2 = random.randint(1, 6)
+        die1, die2 = self._decide_craps_roll(tenant_id)
         roll_sum = die1 + die2
         point = session.get("craps_point")
         context = CrapsRollContext(die1, die2, point)
@@ -300,7 +351,7 @@ class WageringApplicationService:
             self._require_balance(wallet, self._zeus_spin_cost)
             wallet.debit(self._zeus_spin_cost, "zeus")
             wager = self._zeus_spin_cost
-        grid = self._grid_factory.generate(5, 5)
+        grid = self._decide_zeus_grid(user_id)
         winnings = GridWinEvaluator(
             grid, self._line_evaluation_strategy
         ).evaluate()
