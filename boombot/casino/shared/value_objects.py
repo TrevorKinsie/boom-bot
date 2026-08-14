@@ -59,11 +59,15 @@ class Money(AbstractValueObject):
     __slots__ = ("_amount",)
 
     def __init__(self, amount: Decimal | str | int | float) -> None:
+        if amount is None:
+            raise NegativeMonetaryAmountException(
+                "Cannot construct Money from None."
+            )
         try:
             normalized = Decimal(str(amount))
         except (InvalidOperation, ValueError) as exc:
             raise NegativeMonetaryAmountException(
-                f"Cannot construct Money from invalid value: {amount!r}"
+                f"Cannot construct Money from non-numeric value: {amount!r}"
             ) from exc
         if normalized.is_nan():
             raise NegativeMonetaryAmountException(

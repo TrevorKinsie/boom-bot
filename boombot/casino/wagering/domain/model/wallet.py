@@ -151,10 +151,10 @@ class Wallet(AbstractEventSourcedAggregate):
     @classmethod
     def from_state_dictionary(cls, identity: str, state: dict[str, Any]) -> "Wallet":
         wallet = cls(identity)
-        wallet._balance = Money(state.get("balance", "0"))
-        wallet._total_wagered = Money(state.get("total_wagered", "0"))
-        wallet._total_won = Money(state.get("total_won", "0"))
-        wallet._biggest_win = Money(state.get("biggest_win", "0"))
+        wallet._balance = Money(state.get("balance") or "0")
+        wallet._total_wagered = Money(state.get("total_wagered") or "0")
+        wallet._total_won = Money(state.get("total_won") or "0")
+        wallet._biggest_win = Money(state.get("biggest_win") or "0")
         wallet._free_spins = int(state.get("free_spins", 0))
         wallet._games_played = int(state.get("games_played", 0))
         return wallet

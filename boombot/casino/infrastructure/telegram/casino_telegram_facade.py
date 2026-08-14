@@ -184,8 +184,21 @@ class CasinoTelegramFacade:
 
     # --- Dispatch helper ---
     def _dispatch(self, command: object) -> str:
+        self._assign_command_id(command)
         try:
             result = self._command_bus.dispatch(command)
             return result.get_text()
         except CasinoException as exc:
             return exc.get_message()
+
+    @staticmethod
+    def _assign_command_id(command: object) -> None:
+        """Assign a deterministic command ID so the IdempotencyMiddleware
+        can deduplicate commands retried by Telegram's timeout mechanism."""
+        assigner = getattr(command, "assign_command_id", None)
+        getter = getattr(command, "get_command_id", None)
+        if callable(assigner) and callable(getter):
+            if not getter():
+                user_id = getattr(command, "_user_id", None)
+                command_id = f"{user_id}:telegram" if user_id else "system"
+                assigner(command_id)

@@ -4,7 +4,7 @@ JSON Event Store Adapter.
 Implements :class:`IEventStore` over a JSON Lines (JSONL) append log. Each
 committed domain event is serialized as a single JSON object on its own line
 and appended to the log, preserving append-only semantics. Compacted snapshots
-are maintained in a companion JSON file keyed by aggregate identifier.
+are maintained in per-aggregate JSON files within a snapshot directory.
 
 The adapter is safe for concurrent writers within a single process because all
 writes are funneled through a re-entrant lock.
@@ -35,7 +35,10 @@ class JsonEventStoreAdapter(IEventStore):
 
     def __init__(self, event_log_path: Path, event_registry: EventTypeRegistry) -> None:
         self._event_log_path = Path(event_log_path)
-        self._snapshot_path = self._event_log_path.with_suffix(".snapshots.json")
+        self._snapshot_dir = self._event_log_path.parent / (
+            self._event_log_path.name + ".snapshots"
+        )
+        self._snapshot_dir.mkdir(parents=True, exist_ok=True)
         self._event_registry = event_registry
         self._lock = threading.RLock()
         self._event_log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -93,15 +96,14 @@ class JsonEventStoreAdapter(IEventStore):
     def save_snapshot(
         self, aggregate_id: str, version: AggregateVersion, state: dict[str, Any]
     ) -> None:
+        snapshot_file = self._snapshot_dir / f"{aggregate_id}.json"
         try:
-            snapshots: dict[str, dict[str, Any]] = {}
-            if self._snapshot_path.exists():
-                with self._lock, self._snapshot_path.open("r", encoding="utf-8") as stream:
-                    snapshots = json.load(stream)
-            snapshots[aggregate_id] = {"version": version.number(), "state": state}
-            with self._lock, self._snapshot_path.open("w", encoding="utf-8") as stream:
-                json.dump(snapshots, stream, ensure_ascii=False, indent=2)
-        except (OSError, json.JSONDecodeError) as exc:
+            with self._lock, snapshot_file.open("w", encoding="utf-8") as stream:
+                json.dump(
+                    {"version": version.number(), "state": state},
+                    stream, ensure_ascii=False, indent=2,
+                )
+        except OSError as exc:
             logger.error("Failed to save snapshot to JSON event store: %s", exc)
             raise PersistenceException(
                 f"Could not save snapshot for aggregate {aggregate_id}: {exc}"
@@ -110,14 +112,12 @@ class JsonEventStoreAdapter(IEventStore):
     def load_snapshot(
         self, aggregate_id: str
     ) -> Optional[tuple[AggregateVersion, dict[str, Any]]]:
+        snapshot_file = self._snapshot_dir / f"{aggregate_id}.json"
+        if not snapshot_file.exists():
+            return None
         try:
-            if not self._snapshot_path.exists():
-                return None
-            with self._lock, self._snapshot_path.open("r", encoding="utf-8") as stream:
-                snapshots = json.load(stream)
-            record = snapshots.get(aggregate_id)
-            if record is None:
-                return None
+            with self._lock, snapshot_file.open("r", encoding="utf-8") as stream:
+                record = json.load(stream)
             return AggregateVersion(int(record["version"])), record["state"]
         except (OSError, json.JSONDecodeError) as exc:
             logger.error("Failed to load snapshot from JSON event store: %s", exc)

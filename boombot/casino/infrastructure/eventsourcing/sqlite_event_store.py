@@ -24,6 +24,7 @@ from boombot.casino.application.event.domain_event import AbstractDomainEvent
 from boombot.casino.application.event.event_registry import EventTypeRegistry
 from boombot.casino.infrastructure.eventsourcing.event_store import IEventStore
 from boombot.casino.shared.exceptions import (
+    ConcurrentModificationException,
     JsonSerializationException,
     PersistenceException,
 )
@@ -38,7 +39,8 @@ CREATE TABLE IF NOT EXISTS casino_events (
     occurred_on TEXT NOT NULL,
     version INTEGER NOT NULL,
     event_type TEXT NOT NULL,
-    payload_json TEXT NOT NULL
+    payload_json TEXT NOT NULL,
+    UNIQUE(aggregate_id, version)
 );
 CREATE TABLE IF NOT EXISTS casino_snapshots (
     aggregate_id TEXT PRIMARY KEY,
@@ -70,10 +72,27 @@ class SqliteEventStoreAdapter(IEventStore):
         try:
             with self._lock:
                 cursor = self._connection.cursor()
+                # Optimistic concurrency: verify the incoming events start right
+                # after the last persisted event for this aggregate. If the
+                # expected starting version does not match what is persisted,
+                # a conflicting concurrent write has occurred.
+                first_version = events[0].get_version().number()
+                cursor.execute(
+                    "SELECT MAX(version) FROM casino_events WHERE aggregate_id = ?",
+                    (aggregate_id,),
+                )
+                row = cursor.fetchone()
+                committed_version = row[0] if row and row[0] is not None else 0
+                if first_version <= committed_version:
+                    raise ConcurrentModificationException(
+                        f"Concurrent modification detected for aggregate "
+                        f"{aggregate_id}: expected version > {committed_version} "
+                        f"but got {first_version}."
+                    )
                 for event in events:
                     record = event.to_dictionary()
                     cursor.execute(
-                        "INSERT OR REPLACE INTO casino_events "
+                        "INSERT INTO casino_events "
                         "(event_id, aggregate_id, occurred_on, version, event_type, payload_json) "
                         "VALUES (?, ?, ?, ?, ?, ?)",
                         (
