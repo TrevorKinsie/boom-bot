@@ -24,19 +24,33 @@ primary_region = "iad" # Choose a region close to you or your users
   STOCKFISH_GAME_DEPTH = "12"
   STOCKFISH_ANALYSIS_DEPTH = "12"
   CHESS_ANALYSIS_INTERVAL = "15"
+  # MMO game service (HTTP website) configuration.
+  MMO_BIND = "0.0.0.0"
+  MMO_PORT = "8080"
+  MMO_GAME_DB = "/data/mmo.sqlite3"
+  MMO_WALLET_DB = "/data/casino.sqlite3"
 
+# The MMO game service is an always-on JVM alongside the bot, Stockfish, and
+# the (lazy) decision-engine JVMs, so give the single Machine more memory.
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "512mb"
+  memory = "1024mb"
   processes = ["app"]
 
-# Optional: Define internal port if needed for health checks
-# [http_service]
-#   internal_port = 8080
-#   force_https = true
-#   auto_stop_machines = true
-#   auto_start_machines = true
-#   min_machines_running = 0 # Set to 1 if you want it always running
+# Serve the MMO browser client as a website. The Telegram bot itself uses
+# long polling and needs no public HTTP port.
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/api/world"
 
 # Define the command to run your application
 # This is usually handled by the Dockerfile's CMD, but can be overridden here if needed.

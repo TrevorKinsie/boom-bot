@@ -683,10 +683,15 @@ diagnostic attachments while retaining normal application logging.
 
 ### Fly.io deployment
 
-The included Fly configuration pins one `shared-cpu-1x` Machine with 512 MB of
-RAM, one Stockfish thread, and the persistent `/data` volume. Keep this as a
-single Machine because SQLite volumes attach to one Machine; scaling out would
-require an external database or a replication layer.
+The included Fly configuration pins one `shared-cpu-1x` Machine with 1 GB of
+RAM, one Stockfish thread, and the persistent `/data` volume. The Machine runs
+two services via `start.sh`: the Telegram bot (long polling) and the MMO game
+service, whose browser client is served at `https://<app>.fly.dev`. The MMO
+writes its world state to `/data/mmo.sqlite3` and appends wallet events to the
+same `/data/casino.sqlite3` store the casino microkernel uses.
+
+Keep this as a single Machine because SQLite volumes attach to one Machine;
+scaling out would require an external database or a replication layer.
 
 For a new app, create the volume in the app's primary region and deploy:
 
