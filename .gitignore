@@ -46,3 +46,10 @@ terraform/secrets/terraform.tfvars
 lib64
 pyvenv.cfg
 .envcopy
+
+# MMO game service build artifacts + local game database writes
+mmo-server/build/
+mmo-server/*.log
+mmo-server/node_modules/
+# Vendored three.js r128 global build must ship in the jar (see build.sh).
+!mmo-server/src/main/resources/static/lib/
