@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2019",
+    "module": "none",
+    "lib": ["ES2019", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "noEmitOnError": true,
+    "rootDir": "src/main/resources/static",
+    "outDir": "build/client-js",
+    "types": [],
+    "skipLibCheck": true
+  },
+  "include": ["src/main/resources/static/**/*.ts"],
+  "exclude": ["node_modules", "build"]
+}

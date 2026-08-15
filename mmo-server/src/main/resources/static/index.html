@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Boom Bot MMO</title>
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<div id="app">
+  <div id="scene"></div>
+
+  <!-- Join / resume overlay -->
+  <div id="overlay">
+    <div class="card">
+      <h1>Boom Bot <span>MMO</span></h1>
+      <p class="sub">A persistent low-poly world backed by the shared wallet.</p>
+      <form id="join-form">
+        <input id="name-input" type="text" placeholder="Adventurer name" maxlength="20" autocomplete="off">
+        <button id="join-btn" type="submit">Join World</button>
+      </form>
+      <p id="resume-note" class="dim" hidden>Resuming previous session…</p>
+      <p id="error-note" class="err" hidden></p>
+      <div class="hint">
+        <b>How to play</b>
+        <ul>
+          <li><b>Click</b> empty ground to walk.</li>
+          <li><b>Click</b> a tree or rock to gather it.</li>
+          <li>Sell logs/ore — coins go to your <b>shared wallet</b>.</li>
+          <li>Everything persists; reopen the page to resume.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud" hidden>
+    <div id="topbar">
+      <div id="player-card">
+        <span class="badge" id="hud-name">—</span>
+        <span class="badge">Mine Lv <b id="hud-mining">1</b></span>
+        <span class="badge">Wood Lv <b id="hud-wood">1</b></span>
+        <span class="badge money">🪙 <b id="hud-gold">0</b></span>
+        <span class="badge money">🏦 Wallet <b id="hud-wallet">0.00</b></span>
+      </div>
+      <div id="players-bar"><b>Online:</b> <span id="hud-online">1</span></div>
+    </div>
+
+    <div id="log"></div>
+
+    <div id="side">
+      <div class="panel" id="inventory-panel">
+        <h3>Inventory</h3>
+        <ul id="inventory-list"></ul>
+        <div class="row" style="margin-top:6px">
+          <span id="hud-side-gold">Carrying: 0 coins</span>
+          <button id="gold-deposit" class="mini">Deposit gold</button>
+        </div>
+      </div>
+      <div class="panel" id="skills-panel">
+        <h3>Skills</h3>
+        <div id="skills-list"></div>
+        <p class="dim">Sell or bank items from your inventory. Deposited gold is written to the shared wallet event store.</p>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="/static/lib/three.min.js"></script>
+<script src="/static/lib/OrbitControls.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -7,12 +7,17 @@ FROM python:3.13.3-slim
 # openjdk-17-jdk-headless + rustc/cargo are the toolchain for the JVM Decision
 # Engine: the decision fabric delegates game outcomes to the JVM, which asks
 # the Rust atomic-logic layer for pure randomness.
+# nodejs/npm/curl build the MMO game service: its client is TypeScript and its
+# build vendors the sqlite-jdbc driver over HTTPS.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         stockfish \
         openjdk-17-jdk-headless \
         rustc \
         cargo \
+        nodejs \
+        npm \
+        curl \
     && ln -s /usr/games/stockfish /usr/local/bin/stockfish \
     && rm -rf /var/lib/apt/lists/*
 
@@ -43,4 +48,8 @@ RUN pip install -e .
 # Compile the JVM decision engine (jar + Rust atomic_cli binary)
 RUN ./decision-engine/build.sh
 
-CMD ["python", "main.py"]
+# Compile the MMO game service (jar + browser client + vendored sqlite-jdbc)
+RUN ./mmo-server/build.sh
+
+# Run the Telegram bot and the MMO game service (HTTP website) together.
+CMD ["bash", "start.sh"]

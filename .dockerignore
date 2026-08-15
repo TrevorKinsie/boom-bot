@@ -25,6 +25,10 @@ build/
 dist/
 *.egg-info/
 *.egg
+node_modules/
+
+# MMO game service build outputs (rebuilt inside the image)
+mmo-server/build/
 
 # Test artifacts
 .pytest_cache/
