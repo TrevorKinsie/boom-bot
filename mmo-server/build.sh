@@ -39,7 +39,7 @@ javac --release 17 -encoding UTF-8 -cp "$SQLITE_JAR" -d "$CLASSES_DIR" @"$BUILD_
 echo "==> Compiling TypeScript client..."
 if [ ! -x "$ROOT/node_modules/.bin/tsc" ]; then
     echo "    [warn] TypeScript not installed; running 'npm install' (needs network)" >&2
-    npm install --no-audit --no-fund
+    (cd "$ROOT" && npm install --no-audit --no-fund)
 fi
 if [ -x "$ROOT/node_modules/.bin/prettier" ]; then
     if ! "$ROOT/node_modules/.bin/prettier" --check "$STATIC_DIR"/*.ts >/dev/null 2>&1; then
