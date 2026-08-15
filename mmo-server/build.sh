@@ -34,7 +34,7 @@ echo "==> Compiling Java sources..."
 rm -rf "$CLASSES_DIR"
 mkdir -p "$CLASSES_DIR"
 find "$SRC_DIR" -name '*.java' | sort > "$BUILD_DIR/mmo-sources.txt"
-javac --release 17 -cp "$SQLITE_JAR" -d "$CLASSES_DIR" @"$BUILD_DIR/mmo-sources.txt"
+javac --release 17 -encoding UTF-8 -cp "$SQLITE_JAR" -d "$CLASSES_DIR" @"$BUILD_DIR/mmo-sources.txt"
 
 echo "==> Compiling TypeScript client..."
 if [ ! -x "$ROOT/node_modules/.bin/tsc" ]; then
