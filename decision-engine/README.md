@@ -93,6 +93,39 @@ uniform odds as the JVM/Rust path, so the application layer never blocks on a
 hardware or toolchain dependency. The house edge is defined by the payout
 tables, not by the decision engine.
 
+## Neural engine (JavaBeans)
+
+The JVM middleware also ships an optional neural atomic provider rendered
+entirely by JavaBeans — the engine is a graph of standard JavaBean components:
+`Neuron`, `Layer` and `NeuralNetwork` in
+`com.boombot.decisionengine.neural`. Every bean follows the JavaBeans
+conventions (public no-arg constructor, private fields with public
+getters/setters, bound properties fired through `PropertyChangeSupport`,
+`PropertyChangeListener` propagation from neurons up to the network, and Java
+serialisation), so the model is introspectable and persistable as a plain bean
+graph.
+
+- The provider is deterministic: the same seed renders the same outcome on
+  every boot (built-in networks are seeded-init, and outcomes are a pure
+  function of the seed), preserving the verifiability contract of the fabric.
+- Built-in (untrained) networks guarantee uniform odds by aggregating
+  independently salted forward passes per outcome; a loaded trained model
+  decides through its own softmax head.
+- A network can be trained (`NeuralNetwork.train`, on-line SGD with
+  backpropagation), saved and restored with Java serialisation, and supplied
+  to the engine through `DECISION_ENGINE_NEURAL_MODEL`. The model drives
+  whichever decision kind matches its output width (38 roulette pockets,
+  36 craps die pairs, 9 Zeus symbols, 64 fairness-hash bits); the remaining
+  kinds keep their built-in networks.
+
+```bash
+DECISION_ENGINE_NEURAL=1 ./run-decision-engine.sh <<'EOF'
+{"id":"r1","kind":"ROULETTE_SPIN","seed":"a1b2c3"}
+EOF
+```
+
+enable the neural provider; responses then report `"atomic":"neural"`.
+
 ## Building
 
 Requirements: a JDK 17+ and, for the Rust path, a Rust toolchain. The Java step
@@ -132,3 +165,5 @@ child process; use it rather than invoking `java -jar` directly.
 | --- | --- | --- |
 | `DECISION_ENGINE_RUST_BIN` | path to the compiled `atomic_cli` | `build/atomic_cli` |
 | `DECISION_ENGINE_TIMEOUT_SECONDS` | per-decision child timeout | `5` |
+| `DECISION_ENGINE_NEURAL` | `1`/`true`/`yes`/`on` selects the JavaBeans neural provider over Rust/reference | unset |
+| `DECISION_ENGINE_NEURAL_MODEL` | path to a serialised `NeuralNetwork` bean (see the neural-engine section) | unset |
