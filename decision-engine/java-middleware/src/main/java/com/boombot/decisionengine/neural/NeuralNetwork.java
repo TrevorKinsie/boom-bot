@@ -21,7 +21,7 @@ import java.util.Random;
  * <p>Implements the JavaBeans contract end to end: public no-arg constructor,
  * private fields with public getters/setters, bound properties fired through
  * {@link PropertyChangeSupport}, Java serialisation for persistence, and
- * listener propagation — the network registers itself as a
+ * listener propagation - the network registers itself as a
  * {@link PropertyChangeListener} on every composed layer and forwards layer
  * and neuron change events to its own listeners.</p>
  *
