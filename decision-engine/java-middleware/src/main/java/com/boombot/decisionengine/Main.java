@@ -25,7 +25,9 @@ public final class Main {
         long timeoutMillis = parseTimeoutEnv();
 
         AtomicLogicPort primary;
-        if (rustBin != null && !rustBin.isBlank() && new File(rustBin).canExecute()) {
+        if (neuralEnabled()) {
+            primary = buildNeuralProvider();
+        } else if (rustBin != null && !rustBin.isBlank() && new File(rustBin).canExecute()) {
             primary = new RustAtomicLogic(rustBin, timeoutMillis);
         } else {
             primary = new ReferenceAtomicLogic();
@@ -64,5 +66,42 @@ public final class Main {
         } catch (RuntimeException ex) {
             return 5000L;
         }
+    }
+
+    /** {@code DECISION_ENGINE_NEURAL}=1|true|yes|on selects the JavaBeans neural provider. */
+    private static boolean neuralEnabled() {
+        String raw = System.getenv("DECISION_ENGINE_NEURAL");
+        if (raw == null) {
+            return false;
+        }
+        switch (raw.trim().toLowerCase()) {
+            case "1":
+            case "true":
+            case "yes":
+            case "on":
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /** Build the neural provider, optionally from a serialised {@code NeuralNetwork} model. */
+    private static AtomicLogicPort buildNeuralProvider() {
+        String modelPath = System.getenv("DECISION_ENGINE_NEURAL_MODEL");
+        if (modelPath != null && !modelPath.isBlank()) {
+            File modelFile = new File(modelPath);
+            if (modelFile.isFile()) {
+                try {
+                    return new NeuralAtomicLogic(modelFile);
+                } catch (AtomicLogicException ex) {
+                    System.err.println("[warn] neural model unusable (" + ex.getMessage()
+                            + "); falling back to built-in networks.");
+                }
+            } else {
+                System.err.println("[warn] neural model not found at " + modelPath
+                        + "; using built-in networks.");
+            }
+        }
+        return new NeuralAtomicLogic();
     }
 }
