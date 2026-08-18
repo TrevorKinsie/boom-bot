@@ -176,7 +176,7 @@ public class Layer implements Serializable {
 
     /**
      * Hidden-layer error pass: backpropagate {@code next}'s deltas through
-     * {@code next}'s weights onto this layer. Pure error propagation — weight
+     * {@code next}'s weights onto this layer. Pure error propagation - weight
      * updates happen afterwards via {@link #updateWeights(double)} once every
      * layer's deltas have been computed against the pre-update weights.
      */

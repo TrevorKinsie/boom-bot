@@ -17,7 +17,7 @@ import java.util.Map;
  * numeric seed into a deterministic feature vector, runs it through a
  * {@link NeuralNetwork} bean graph (deterministically initialised, so the
  * engine renders the same outcome for the same seed on every boot), and maps
- * the output activations onto the raw result shape of each game family —
+ * the output activations onto the raw result shape of each game family
  * identical to the shapes produced by the Rust and reference providers.</p>
  *
  * <p>An optional trained model may be supplied as a serialised

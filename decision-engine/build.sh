@@ -34,7 +34,7 @@ echo "==> Compiling Java middleware..."
 rm -rf "$CLASSES_DIR"
 mkdir -p "$CLASSES_DIR"
 find "$JAVA_DIR/src/main/java" -name '*.java' > "$BUILD_DIR/sources.txt"
-javac -d "$CLASSES_DIR" @"$BUILD_DIR/sources.txt"
+javac -encoding UTF-8 -d "$CLASSES_DIR" @"$BUILD_DIR/sources.txt"
 
 echo "==> Packaging decision engine jar..."
 cat > "$BUILD_DIR/MANIFEST.MF" <<'EOF'
