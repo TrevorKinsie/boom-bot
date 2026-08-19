@@ -6,16 +6,40 @@ on:
     types:
       - completed
     branches:
-      - main # Or your default branch
+      - main
+
+# Never race deploys: if a newer main push lands while a deploy is mid-flight,
+# cancel the stale one (its image is obsolete and the next run covers it).
+# Only push-to-main runs pass the head_branch filter, so this only fires for
+# the commit whose tests actually passed.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   deploy:
     name: Deploy app
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion == 'success' # Only run if the test workflow succeeded
+    timeout-minutes: 30
+    # Belt-and-braces with the branches filter: run only for successful
+    # push-to-main test runs, never PR runs.
+    if: >-
+      github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.head_branch == 'main'
     steps:
       - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+        with:
+          # Deploy exactly the commit that was tested, even if main moved on
+          # between the test run finishing and this deploy starting.
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: superfly/flyctl-actions/setup-flyctl@v1
+        with:
+          version: "0.4.85"
+
       - name: Configure chess diagnostic recipients
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
@@ -24,6 +48,8 @@ jobs:
           if [ -n "$CHESS_ERROR_LOG_USER_IDS" ]; then
             flyctl secrets set --app boom-bot "CHESS_ERROR_LOG_USER_IDS=$CHESS_ERROR_LOG_USER_IDS"
           fi
-      - run: flyctl deploy --remote-only
+
+      - name: Deploy to Fly.io
+        run: flyctl deploy --remote-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
