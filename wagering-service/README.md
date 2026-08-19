@@ -104,7 +104,8 @@ Wallet state in `data`:
 ```
 
 Money is passed and returned as decimal strings, quantised to cents (2dp),
-matching the Python side's `CASINO_CURRENCY_QUANTIZATION` of `0.01`.
+matching the bot's `CASINO_CURRENCY_QUANTIZATION` of `0.01` (the env var is
+kept by the C++20 port's `bb_config`).
 
 ## Durability & tamper handling
 
@@ -119,10 +120,10 @@ leniently falls back to a fresh wallet — true deletion is out of scope.
 The `user` id hashes (splitmix64) to the filename, so the id never appears
 on disk in cleartext; the JSON payloads themselves are sealed.
 
-## Roadmap (not in this PR)
+## Roadmap (not yet wired in)
 
-- Python-side gateway spawn/recovery mirroring the JVM decision engine
-  pattern (`JvmDecisionEngineGateway`), and placement behind the existing
-  `IDecisionEngine`-style abstraction.
+- Adoption by the Telegram bot: a spawn/recovery gateway in the C++20 bot
+  mirroring the former `JvmDecisionEngineGateway` pattern, placed behind the
+  wallet-service seam instead of the in-process `WageringService`.
 - Snapshot compaction hook (the store already supports it; nothing calls
   it yet), and a `reset`-style administrative RPC for operators.

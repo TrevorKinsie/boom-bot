@@ -47,16 +47,16 @@ replayable.
 
 ## 3. Decision flow
 
-The control flow from a Telegram update to a persisted wallet mutation,
-rendered as a Mermaid decision flowchart (the same diagram appears in
-`decision-engine/README.md`):
+The control flow from a client process to a rendered decision, rendered as a
+Mermaid decision flowchart (the same diagram appears in
+`decision-engine/README.md`). The former Telegram-side orchestration
+(`CasinoTelegramFacade` → buses → `WageringApplicationService`) was retired
+with the C++20 rewrite; the C++20 bot now renders decisions in-process and the
+engine is driven directly by its client over JSON lines:
 
 ```mermaid
 flowchart TD
-    TG["Telegram Update"]
-    FAC["CasinoTelegramFacade"]
-    CB["CommandBus / QueryBus"]
-    WSV["WageringApplicationService"]
+    CL["Client process<br/>(JSON-lines stdio)"]
     DS["DecisionService.decide()"]
     AVAIL{"JVM engine available?"}
     JVM["JVM Decision Engine<br/>(Java middleware)"]
@@ -64,14 +64,8 @@ flowchart TD
     RUST["Rust Atomic Logic"]
     JREF["ReferenceAtomicLogic (in-JVM)"]
     REF["ReferenceDecisionEngine (in-process)"]
-    WAL["Wallet Aggregate"]
-    EB["IEventBus"]
-    LBRD["Leaderboard Read Model"]
 
-    TG --> FAC
-    FAC -->|command / query| CB
-    CB --> WSV
-    WSV --> DS
+    CL --> DS
     DS --> AVAIL
     AVAIL -->|yes| JVM
     AVAIL -->|no| REF
@@ -82,10 +76,6 @@ flowchart TD
     JREF -->|raw result| JVM
     JVM -->|Decision| DS
     REF -->|Decision| DS
-    DS -->|validated Decision| WSV
-    WSV -->|mutate| WAL
-    WAL -->|domain events| EB
-    EB --> LBRD
 ```
 
 The decision fabric is the single seam between the application layer and the
@@ -170,7 +160,7 @@ points; no existing component is edited.
 ```mermaid
 flowchart TD
     NEW["New Game Type"]
-    NEW --> K["Add DecisionKind (Java + Python)"]
+    NEW --> K["Add DecisionKind (Java, wired into the consuming client)"]
     K --> S["Implement DecisionStrategy.compose()"]
     S --> P["Optionally add a Rust atomic primitive"]
     P --> SPEC["Add an output DecisionSpecification"]
@@ -183,8 +173,8 @@ flowchart TD
 | `DecisionKind` | Domain | A stable wire identifier shared across all three layers. |
 | `DecisionStrategy` | Java middleware | Composes a raw atomic result into the game's decision payload. |
 | `AtomicLogicPort` | Java middleware | Abstraction over the Rust binary vs. in-JVM reference provider. |
-| `DecisionSpecification` | Python domain | Output invariant guarding the rendered decision. |
-| `IDecisionEngine` | Python infrastructure | Provider seam; the fabric routes through it generically. |
+| `DecisionSpecification` | Consuming client (formerly Python domain) | Output invariant guarding the rendered decision. |
+| `IDecisionEngine` | Consuming client (formerly Python infrastructure) | Provider seam; the fabric routes through it generically. |
 
 A new game touches the strategy registry and specification map only; the
 wallet, event bus, command/query buses, and JSON-lines transport are untouched.

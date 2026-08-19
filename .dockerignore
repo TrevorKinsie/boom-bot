@@ -7,6 +7,17 @@
 .dockerignore
 Dockerfile*
 
+# Runtime/data (recreated from /app on Fly's volume)
+data/
+logs/
+.worktrees/
+
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+
 # Python bytecode
 __pycache__/
 *.pyc
