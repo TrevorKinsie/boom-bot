@@ -1,16 +1,30 @@
 # boom-bot JVM Decision Engine
 
-This is the decision fabric for the boom-bot casino platform. It sits between
-the Python orchestrator and the pure atomic-logic layer so that the PURE
-business logic of a *decision* (the house's choice about what the wheel lands
-on, what the dice show, what the Zeus reels reveal) is delegated away from the
-application service and rendered by a dedicated engine.
+This is the decision fabric for the boom-bot casino platform. It isolates the
+PURE business logic of a *decision* (the house's choice about what the wheel
+lands on, what the dice show, what the Zeus reels reveal) in a dedicated
+engine, away from any application service. Any client can render a decision by
+emitting one JSON line on the engine's stdin.
+
+## Status after the C++20 rewrite
+
+The Telegram bot was ported to a standalone **C++20 binary** (`bot-cpp/`) and
+the Python orchestrator (`boombot.casino`, which used to drive this engine) was
+retired. In the C++20 port the `WageringService` renders casino outcomes
+**in-process** (its `roulette_pocket` / `craps_roll` / `zeus_grid` hooks use
+the standard-library RNG — the "reference" provider), so the JVM engine is no
+longer downstream of the bot; the `DECISION_ENGINE_*` variables remain in
+`bot-cpp` config for compatibility. This engine stays as a standalone
+component: it still builds into the Docker image and speaks the same
+JSON-lines protocol, so it can be driven directly by any process (the C
+wagering service uses the same transport pattern).
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  Python orchestrator (boombot.casino)                                   │
+│  Client (any process, e.g. the former Python orchestrator; today       │
+│  driven directly over stdio)                                           │
 │    builds a DecisionRequest: {kind, seed, tenant, context}              │
 │    emits it as one JSON line on the engine's stdin                      │
 └───────────────────────────────────┬─────────────────────────────────────┘
@@ -37,10 +51,7 @@ application service and rendered by a dedicated engine.
 
 ```mermaid
 flowchart TD
-    TG["Telegram Update"]
-    FAC["CasinoTelegramFacade"]
-    CB["CommandBus / QueryBus"]
-    WSV["WageringApplicationService"]
+    CL["Client process<br/>(JSON-lines stdio)"]
     DS["DecisionService.decide()"]
     AVAIL{"JVM engine available?"}
     JVM["JVM Decision Engine<br/>(Java middleware)"]
@@ -48,14 +59,8 @@ flowchart TD
     RUST["Rust Atomic Logic"]
     JREF["ReferenceAtomicLogic (in-JVM)"]
     REF["ReferenceDecisionEngine (in-process)"]
-    WAL["Wallet Aggregate"]
-    EB["IEventBus"]
-    LBRD["Leaderboard Read Model"]
 
-    TG --> FAC
-    FAC -->|command / query| CB
-    CB --> WSV
-    WSV --> DS
+    CL --> DS
     DS --> AVAIL
     AVAIL -->|yes| JVM
     AVAIL -->|no| REF
@@ -66,19 +71,12 @@ flowchart TD
     JREF -->|raw result| JVM
     JVM -->|Decision| DS
     REF -->|Decision| DS
-    DS -->|validated Decision| WSV
-    WSV -->|mutate| WAL
-    WAL -->|domain events| EB
-    EB --> LBRD
 ```
 
 The control flow above is elaborated for scale in
 [`SCALING.md`](SCALING.md), including the regionally distributed deployment
 topology and the extensibility model.
 
-The protocol is line-delimited JSON over a spawned subprocess, the same shape
-as boom-bot's existing UCI Stockfish integration. One decision = one short-lived
-`atomic_cli` process.
 The protocol is line-delimited JSON over a spawned subprocess, the same shape
 as boom-bot's existing UCI Stockfish integration. One decision = one short-lived
 `atomic_cli` process.
