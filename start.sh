@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Fly.io container entrypoint: run the Telegram bot and the MMO game service
-# (HTTP website) together on one Machine.
+# Fly.io container entrypoint: run the Telegram bot (C++20 binary) and the MMO
+# game service (HTTP website) together on one Machine.
 #
 set -euo pipefail
 
@@ -17,7 +17,7 @@ SQLITE_JAR="$(ls /app/mmo-server/build/sqlite-jdbc-*.jar 2>/dev/null | head -1 |
 java -cp "/app/mmo-server/build/mmo-server.jar${SQLITE_JAR:+:$SQLITE_JAR}" com.boombot.mmo.MmoServerMain &
 MMO_PID=$!
 
-python main.py &
+/app/bot-cpp/build/boombot &
 BOT_PID=$!
 
 # If either process exits, tear down the container so Fly restarts it cleanly.

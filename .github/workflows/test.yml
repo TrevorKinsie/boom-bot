@@ -13,25 +13,32 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    # The Telegram bot is a C++20 binary (bot-cpp/), its self-tests are the
+    # authoritative gate (751 checks). ubuntu-latest ships a C++20-capable g++.
+    - name: Build and run C++20 bot tests
+      run: |
+        cd bot-cpp
+        ./build.sh
+        ./build/boombot-tests
+
+    # The standalone C wagering service builds and tests with bare gcc.
+    - name: Build and run C wagering service tests
+      run: ./wagering-service/test.sh
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
 
-    - name: Install Stockfish
-      run: sudo apt-get update && sudo apt-get install -y stockfish
-
+    # Required by the MMO integration tests: javac/java, node/npm (TS client),
+    # and curl (vendors the sqlite-jdbc driver). All present on ubuntu-latest.
     - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        # Install NLTK data required by your bot and tests
-        python -m nltk.downloader punkt wordnet averaged_perceptron_tagger stopwords
+      run: python -m pip install --upgrade pip && pip install -r requirements.txt
 
-    - name: Run pytest
+    - name: Run surviving Python integration tests
       env:
         TELEGRAM_TOKEN: "test_token"
-      run: pytest
+      run: pytest tests/test_c_wagering_service.py tests/test_mmo_server.py -v
 
     - name: Set up flyctl
       uses: superfly/flyctl-actions/setup-flyctl@master

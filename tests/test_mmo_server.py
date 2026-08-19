@@ -5,9 +5,10 @@ SQLite driver), drive its HTTP API, and assert the two Ps the feature is built
 around — **Persistence** and the **shared wallet**:
 
 1. World/player state survives a full service restart.
-2. The MMO's wealth is written into the *same* ``casino_events`` SQLite store
-   the casino microkernel uses, and the Python ``boombot.casino`` wallet stack
-   can replay those Java-written events and reconstruct the balance.
+2. The MMO's wealth is written as wallet domain events into the ``casino_events``
+   SQLite store in the Python-era event schema (the schema the retired
+   ``boombot.casino`` wallet used, and the schema a future C++20 adapter would
+   replay).
 
 Skipped when ``java`` is unavailable or the jar cannot be built, so the pure
 Python test suite still runs anywhere.
@@ -18,6 +19,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import time
 import urllib.error
@@ -189,7 +191,7 @@ def test_persistence_across_restart_and_shared_wallet(tmp_path):
 
 
 def test_python_can_replay_java_wallet_events(tmp_path):
-    """Shared-wallet proof: java writes events; the Python casino wallet replays them."""
+    """Shared-wallet proof: Java appends Python-era events to casino_events."""
     game = tmp_path / "game.sqlite3"
     wallet = tmp_path / "wallet.sqlite3"
     server = MmoServer(tmp_path, game, wallet, 8144)
@@ -209,18 +211,30 @@ def test_python_can_replay_java_wallet_events(tmp_path):
     finally:
         server.stop()
 
-    from boombot.casino.application.event.event_registry import create_default_event_type_registry
-    from boombot.casino.infrastructure.eventsourcing.event_store import SnapshotPolicy
-    from boombot.casino.infrastructure.eventsourcing.sqlite_event_store import SqliteEventStoreAdapter
-    from boombot.casino.shared.value_objects import Money
-    from boombot.casino.wagering.infrastructure.persistence.wallet_repository import WalletRepository
+    # Verify the append-only event log written by Java against the shared
+    # schema: casino_events(event_id, aggregate_id, occurred_on, version,
+    # event_type, payload_json). The retired Python wallet (boombot.casino)
+    # used exactly this table; the balance Java reported must equal the sum
+    # of the credited events.
+    conn = sqlite3.connect(wallet)
+    try:
+        rows = conn.execute(
+            "SELECT version, event_type, payload_json FROM casino_events "
+            "WHERE aggregate_id = ? ORDER BY version ASC",
+            ("mmo:" + joined_id,),
+        ).fetchall()
+    finally:
+        conn.close()
 
-    store = SqliteEventStoreAdapter(wallet, create_default_event_type_registry())
-    repo = WalletRepository(store, SnapshotPolicy(50))
-    agg = "mmo:" + joined_id
-    events = store.load(agg)
-    assert events[0].event_type() == "WalletCreatedEvent"
-    assert any(e.event_type() == "FundsCreditedEvent" for e in events)
-    loaded = repo.find(agg)
-    assert loaded is not None
-    assert loaded.get_balance() == Money(str(java_balance / 100))
+    assert rows, "Java service wrote no wallet events"
+    assert rows[0][1] == "WalletCreatedEvent"
+    assert any(t == "FundsCreditedEvent" for _, t, _ in rows)
+
+    credit_cents = sum(
+        int(round(float(json.loads(payload)["payload"]["amount"]) * 100))
+        for _, t, payload in rows
+        if t == "FundsCreditedEvent"
+    )
+    assert credit_cents == java_balance, (
+        f"replayed credits ({credit_cents}) != Java-reported balance ({java_balance})"
+    )

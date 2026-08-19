@@ -40,9 +40,9 @@ void on_signal(int) {
 std::string bot_username_cache;
 
 // Casino components, mirroring the casino application context: JSON event
-// store at data/casino_events.json with snapshots beside it, snapshot
-// threshold from CASINO_SNAPSHOT_THRESHOLD, starting balance and zeus cost
-// from config.
+// store at CASINO_EVENT_STORE_JSON (default <DATA_DIR>/casino_events.json)
+// with snapshots beside it, snapshot threshold from CASINO_SNAPSHOT_THRESHOLD,
+// starting balance and zeus cost from config.
 struct CasinoContext {
     bb::JsonEventStore store;
     bb::SnapshotPolicy policy;
@@ -54,7 +54,8 @@ struct CasinoContext {
     bb::CasinoFacade facade;
 
     CasinoContext()
-        : store("data/casino_events.json", "data/casino_events.json.snapshots"),
+        : store(bb::cfg::CASINO_EVENT_STORE_JSON_FILE,
+                bb::cfg::CASINO_EVENT_STORE_JSON_FILE + ".snapshots"),
           policy(bb::cfg::CASINO_SNAPSHOT_THRESHOLD > 0 ? bb::cfg::CASINO_SNAPSHOT_THRESHOLD : 50),
           repository(store, policy, bb::Money(bb::cfg::CASINO_STARTING_BALANCE)),
           service(repository, store, sessions, bus,

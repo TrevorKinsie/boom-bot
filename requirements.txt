@@ -1,9 +1,1 @@
-python-telegram-bot
-python-chess>=1.11.0
-Pillow>=10.0
-python-dotenv
-nltk
-inflect
 pytest
-pytest-asyncio
-requests
