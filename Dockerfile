@@ -16,6 +16,7 @@ RUN apt-get update \
         g++ \
         gobjc \
         libobjc-12-dev \
+        make \
         openjdk-17-jdk-headless \
         rustc \
         cargo \
