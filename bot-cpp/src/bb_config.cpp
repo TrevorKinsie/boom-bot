@@ -2,6 +2,7 @@
 
 #include "bb_util.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -41,6 +42,10 @@ std::string DECISION_ENGINE_JAR;
 std::string DECISION_ENGINE_RUST_BIN;
 std::string DECISION_ENGINE_MODE = "auto";
 double DECISION_ENGINE_TIMEOUT_SECONDS = 5.0;
+
+std::string CHESS_ENGINE_PATH;
+int64_t CHESS_ENGINE_DEPTH = 14;
+std::string CHESS_GAMES_FILE;
 
 namespace {
 
@@ -143,6 +148,10 @@ void load_config() {
         DECISION_ENGINE_MODE = "auto";
     }
     DECISION_ENGINE_TIMEOUT_SECONDS = env_double("DECISION_ENGINE_TIMEOUT_SECONDS", 5.0);
+
+    CHESS_ENGINE_PATH = env_or("CHESS_ENGINE_PATH", "../chess-objc/build/chess-objc");
+    CHESS_ENGINE_DEPTH = std::max<int64_t>(1, env_int("CHESS_ENGINE_DEPTH", 14));
+    CHESS_GAMES_FILE = env_or("CHESS_GAMES_FILE", DATA_DIR + "/chess_games.json");
 }
 
 } // namespace cfg

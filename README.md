@@ -6,8 +6,8 @@ Since the C++20 rewrite the bot is a **standalone C++20 binary** (`bot-cpp/`)
 built with nothing but `g++` — JSON, money, HTTP (via a `curl` subprocess), the
 Telegram client, NLTK-style fuzzy matching, and the LLM client are all
 implemented in `bot-cpp/src/`. The Python implementation was retired in the
-port; the only Python that remains is the **Chess Challenge engine**
-(`boombot/games/chess`), which the C++ bot ignores until it is ported.
+port; chess now runs against the in-house Objective-C engine
+(`chess-objc/`), a UCI subprocess driven through `bot-cpp/src/bb_chess.cpp`.
 
 ## Features
 
@@ -42,10 +42,12 @@ port; the only Python that remains is the **Chess Challenge engine**
     *   `/crapsroll`: Roll the dice and settle this chat's craps wagers.
     *   `/zeus`: Spin the persistent Zeus reel family (four/five-of-a-kind
         earn free spins, jackpots pay 5,000 coins; replies use MarkdownV2).
-*   **Chess Challenge (community vs Stockfish):** the Python engine
-    (`boombot/games/chess`) is retained but not yet wired into the C++ bot;
-    chess commands are ignored for now. See
-    [Chess Challenge configuration](#chess-challenge-configuration-python).
+*   **Chess Challenge (community vs the in-house engine):** `/chess
+    [difficulty 0-20]` or `/newgame` starts a game against the Objective-C
+    engine; `/move <SAN>` (e.g. `/move Nf3`) or a bare message (e.g. `e4`)
+    plays; `/resign`, `/draw`, `/board` manage the game. Board and
+    end-of-game detection come from the engine itself (no Stockfish). See
+    [Chess Challenge configuration](#chess-challenge-configuration).
 
 The legacy multi-channel Python games (`/roll`, `/bet`, `/showgame`,
 `/resetmygame`, `/crapshelp` and the standalone roulette/Zeus handlers) were
@@ -57,12 +59,12 @@ their unified replacement.
 | Path | What it is |
 | --- | --- |
 | `bot-cpp/` | The Telegram bot: C++20 sources, headers, self-tests, `build.sh` |
-| `boombot/games/chess` | Chess Challenge engine (Python, not yet ported) |
+| `chess-objc/` | The in-house Objective-C chess engine (UCI) the bot plays against |
 | `decision-engine/` | JVM Decision Engine (Java middleware + Rust atomic logic) |
 | `wagering-service/` | Standalone C wallet service (encrypted event logs, sponsorship) |
 | `mmo-server/` | Persistent browser MMO (Java service + Three.js client) |
-| `tests/` | Python integration tests for the C wagering service and the MMO (the C++20 bot's own suite lives in `bot-cpp/tests`, 751 checks) |
-| `data/` | Runtime state: casino event log, chess DB, MMO world DB |
+| `tests/` | Python integration tests for the C wagering service and the MMO (the C++20 bot's own suite lives in `bot-cpp/tests`, 794 checks) |
+| `data/` | Runtime state: casino event log, chess games file, MMO world DB |
 
 ## Building
 
@@ -73,7 +75,15 @@ C++20-capable compiler (g++ 12 or newer) and `curl` at runtime. There is no
 ```bash
 cd bot-cpp
 ./build.sh            # produces build/boombot and build/boombot-tests
-./build/boombot-tests # self-tests: 751 checks, 0 failures
+./build/boombot-tests # self-tests: 794 checks, 0 failures
+```
+
+Chess needs the engine binary; build it once (a C compiler with Objective-C
+support and `libobjc`):
+
+```bash
+cd chess-objc
+make clean && make all   # produces build/chess-objc
 ```
 
 JSON (dom/existential), money (fixed-point cents), regex, NLTK-style fuzzy
@@ -311,30 +321,21 @@ encrypted **at rest** with an in-tree ARX cipher, sponsorship records), also
 spoken over JSON lines. It is standalone on this branch — the Telegram bot does
 not yet spawn it. See [`wagering-service/README.md`](wagering-service/README.md).
 
-## Chess Challenge configuration (Python)
+## Chess Challenge configuration
 
-The chess engine (`boombot/games/chess`) still runs Python-side: `python-chess`
-for legal move handling, the native `stockfish` executable, SQLite for durable
-users, games, moves, and post-game analysis, and Pillow for board rendering.
-**It is not yet wired into the C++20 bot** — chess commands are ignored until
-the port lands (the Python files are retained as the reference).
+Chess runs entirely in-process against the in-house Objective-C engine
+(`chess-objc/`), a UCI subprocess driven through `bot-cpp/src/bb_chess.cpp`.
+SAN parsing/rendering, legal-move validation, and end-of-game detection come
+from the engine itself; no external chess software is required.
 
-The default data directory is `./data` for local development. Set
-`BOT_DATA_DIR` to override; on Fly it defaults to `/data`. The Stockfish
-process is started lazily on the first game request. Configure its strength
-with `STOCKFISH_HASH_MB`, `STOCKFISH_THREADS`, and `STOCKFISH_DEPTH`.
-`STOCKFISH_GAME_DEPTH` and `STOCKFISH_ANALYSIS_DEPTH` can override live-game
-and post-game analysis depth independently. The defaults use one thread, a
-64 MB hash, depth 12, and a 15-second analysis interval so the bot remains
-within a small shared VM's memory budget.
+The games file defaults to `<data>/chess_games.json`. Configure the engine
+with `CHESS_ENGINE_PATH` (default `../chess-objc/build/chess-objc`) and the
+maximum search depth with `CHESS_ENGINE_DEPTH` (default 14); `/chess
+<difficulty 0-20>` scales the depth between 1 and that maximum, so the bot
+stays within a small shared VM's memory budget.
 
-Chess interactions carry a request ID through the handler, game service, SQLite
-repository, board renderer, Stockfish process, and background analysis logs.
-When a chess interaction fails, the initiating Telegram user receives the
-user-facing error plus a complete request-scoped `.log` document only when that
-user is present in the `CHESS_ERROR_LOG_USER_IDS` comma-separated runtime
-secret. The deployment workflow forwards the repository secret named
-`CHESS_ERROR_LOG_USER_IDS` to Fly.io.
+All chess state (games, moves) is JSON on the bot's data volume; there is no
+database and no background analysis.
 
 ## MMO game service
 
@@ -362,11 +363,12 @@ is served at `https://<app>.fly.dev`. The MMO writes its world state to
 Keep this as a single Machine because SQLite volumes attach to one Machine;
 scaling out would require an external database or a replication layer.
 
-The container installs the full toolchain (C++20 `g++`, JDK, Rust, Node) at
-image build time, compiles `bot-cpp` (running its 751 self-tests), the JVM
-decision engine, and the MMO jar, and then `start.sh` launches the C++20 bot
-and the MMO service together; both write their state to the persistent `/data`
-volume (`BOT_DATA_DIR`).
+The container installs the full toolchain (C++20 `g++`, Objective-C `gobjc`
+with `libobjc`, JDK, Rust, Node) at image build time, compiles `bot-cpp`
+(running its 794 self-tests), the Objective-C chess engine (`chess-objc/`), the
+JVM decision engine, and the MMO jar, and then `start.sh` launches the C++20
+bot and the MMO service together; both write their state to the persistent
+`/data` volume (`BOT_DATA_DIR`, `CHESS_GAMES_FILE`).
 
 For a new app, create the volume in the app's primary region and deploy:
 

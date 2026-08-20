@@ -6,8 +6,9 @@
  *
  * Casino commands (wallet / leaderboard / resetwallet / roulette /
  * roulettespin / craps / crapsroll / zeus) run through the in-process
- * WageringService; /zeus sends with MarkdownV2 parse mode. Chess stays
- * Python-side for now; unknown commands are ignored.
+ * WageringService; /zeus sends with MarkdownV2 parse mode. Community chess
+ * (chess / newgame / move / resign / draw / board) runs against the in-house
+ * engine through ChessService.
  */
 #include <csignal>
 #include <filesystem>
@@ -17,6 +18,7 @@
 
 #include "bb_casino.h"
 #include "bb_casino_facade.h"
+#include "bb_chess.h"
 #include "bb_config.h"
 #include "bb_data.h"
 #include "bb_event_store.h"
@@ -71,6 +73,56 @@ struct CasinoContext {
 
 CasinoContext* g_casino = nullptr;
 
+// Chess: a persistent engine process handled by ChessService; games are
+// stored per chat in CHESS_GAMES_FILE alongside the other bot data.
+struct ChessContext {
+    bb::chess::GameStore store;
+    bb::chess::UciClient engine;
+    bb::chess::ChessService service;
+
+    ChessContext()
+        : store(bb::cfg::CHESS_GAMES_FILE),
+          engine(bb::cfg::CHESS_ENGINE_PATH),
+          service(engine, store) {
+        store.load();
+    }
+};
+
+ChessContext* g_chess = nullptr;
+
+void handle_chess_command(const bb::TelegramMessage& msg,
+                          const std::string& command,
+                          const std::vector<std::string>& args) {
+    std::string display_name = msg.from.full_name();
+    if (display_name.empty() && !msg.from.username.empty())
+        display_name = msg.from.username;
+    if (display_name.empty())
+        display_name = "Player";
+
+    std::string reply;
+    if (command == "chess" || command == "newgame") {
+        int difficulty = 20;
+        if (!args.empty()) {
+            auto parsed = bb::parse_int(args[0]);
+            if (parsed.has_value() && *parsed >= 0 && *parsed <= 20)
+                difficulty = static_cast<int>(*parsed);
+        }
+        reply = g_chess->service.start(msg.chat.id, display_name, difficulty);
+    } else if (command == "move") {
+        std::string san = bb::join(args, " ");
+        reply = g_chess->service.move(msg.chat.id, san);
+    } else if (command == "resign") {
+        reply = g_chess->service.resign(msg.chat.id);
+    } else if (command == "draw") {
+        reply = g_chess->service.draw(msg.chat.id);
+    } else {
+        return;
+    }
+
+    if (!reply.empty())
+        bb::telegram_send_message(bb::cfg::TELEGRAM_TOKEN, msg.chat.id, reply);
+}
+
 void handle_casino_command(const bb::TelegramMessage& msg,
                            const std::string& command,
                            const std::vector<std::string>& args) {
@@ -124,8 +176,20 @@ void handle_message(const bb::TelegramMessage& msg, bb::DataManager& dm) {
 
     std::string command;
     std::vector<std::string> args;
-    if (!bb::parse_command(text, bot_username_cache, command, args))
+    if (!bb::parse_command(text, bot_username_cache, command, args)) {
+        // A bare message (not a command) in a chat with an active game is a
+        // move in SAN: reply-to-board "e4" was the python-era convention.
+        if (g_chess != nullptr && g_chess->store.find_active(msg.chat.id)) {
+            std::string maybe_san = bb::trim(text);
+            if (!maybe_san.empty() && maybe_san[0] != '/') {
+                std::string reply = g_chess->service.move(msg.chat.id, maybe_san);
+                if (!reply.empty())
+                    bb::telegram_send_message(bb::cfg::TELEGRAM_TOKEN,
+                                              msg.chat.id, reply);
+            }
+        }
         return;
+    }
 
     std::string reply;
     if (command == "boom") {
@@ -143,8 +207,17 @@ void handle_message(const bb::TelegramMessage& msg, bb::DataManager& dm) {
                 command == "crapsroll" || command == "zeus")) {
         handle_casino_command(msg, command, args);
         return;
+    } else if (command == "board") {
+        if (g_chess != nullptr)
+            reply = g_chess->service.board(msg.chat.id);
+    } else if (g_chess != nullptr &&
+               (command == "chess" || command == "newgame" ||
+                command == "move" || command == "resign" ||
+                command == "draw")) {
+        handle_chess_command(msg, command, args);
+        return;
     } else {
-        return; // chess remains Python-side for now
+        return;
     }
 
     if (!reply.empty())
@@ -170,6 +243,9 @@ int main(int argc, char** argv) {
 
     CasinoContext casino;
     g_casino = &casino;
+
+    ChessContext chess;
+    g_chess = &chess;
 
     bot_username_cache = bb::telegram_bot_username(bb::cfg::TELEGRAM_TOKEN);
     bb::log::log_info("Bot ready (username='" + bot_username_cache + "').");
