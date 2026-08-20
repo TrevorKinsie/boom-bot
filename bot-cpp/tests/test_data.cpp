@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <stdexcept>
 #include <sstream>
 #include <string>
 #include <unistd.h>
@@ -18,13 +19,15 @@ namespace {
 std::string temp_dir(const char* label) {
     std::string dir = std::string("/tmp/bb_test_") + label;
     std::string cmd = "rm -rf '" + dir + "' && mkdir -p '" + dir + "'";
-    (void)system(cmd.c_str());
+    if (std::system(cmd.c_str()) != 0)
+        throw std::runtime_error("failed to create test directory");
     return dir;
 }
 
 void write_file(const std::string& path, const std::string& content) {
     std::string cmd = "cat > '" + path + "' << 'BBEOF'\n" + content + "\nBBEOF";
-    (void)system(cmd.c_str());
+    if (std::system(cmd.c_str()) != 0)
+        throw std::runtime_error("failed to write test file");
 }
 
 std::string read_file(const std::string& path) {

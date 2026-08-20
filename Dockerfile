@@ -32,11 +32,12 @@ WORKDIR /app
 # Copy the application source into the container at /app
 COPY . .
 
-# Compile the C++20 Telegram bot and run its self-tests (794 checks).
-RUN ./bot-cpp/build.sh && ./bot-cpp/build/boombot-tests > /tmp/boombot-tests.log && tail -1 /tmp/boombot-tests.log
-
 # Compile the Objective-C chess engine (builds build/chess-objc).
 RUN make -C chess-objc all
+
+# Compile the C++20 Telegram bot and run its self-tests (794 checks). The
+# tests spawn the chess engine, so the engine must exist first in the image.
+RUN ./bot-cpp/build.sh && ./bot-cpp/build/boombot-tests > /tmp/boombot-tests.log && tail -1 /tmp/boombot-tests.log
 
 # Compile the JVM decision engine (jar + Rust atomic_cli binary).
 # Cache mounts keep the cargo registry and the incremental target dir warm

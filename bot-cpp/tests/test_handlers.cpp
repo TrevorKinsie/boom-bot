@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -38,7 +39,8 @@ std::string tmp_answers_file(const char* label) {
     std::string dir = std::string("/tmp/bb_test_handlers_") + label;
     std::string path = dir + "/question_answers.json";
     std::string cmd = "rm -rf '" + dir + "' && mkdir -p '" + dir + "'";
-    (void)std::system(cmd.c_str());
+    if (std::system(cmd.c_str()) != 0)
+        throw std::runtime_error("failed to create handler test directory");
     return path;
 }
 
