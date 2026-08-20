@@ -48,6 +48,11 @@ port; chess now runs against the in-house Objective-C engine
     plays; `/resign`, `/draw`, `/board` manage the game. Board and
     end-of-game detection come from the engine itself (no Stockfish). See
     [Chess Challenge configuration](#chess-challenge-configuration).
+*   **Lake Ontario Fishing (native grammY bot):** `/fish` opens a stateful
+    inline-keyboard fishing camp; players collect rods, reusable lures, bait,
+    and fish, then sell catches for gold. Larger species need better bait and
+    can miss or break an equipped rod. Catches are shown with a Wikipedia image
+    resolved for that species.
 
 The legacy multi-channel Python games (`/roll`, `/bet`, `/showgame`,
 `/resetmygame`, `/crapshelp` and the standalone roulette/Zeus handlers) were
@@ -59,11 +64,12 @@ their unified replacement.
 | Path | What it is |
 | --- | --- |
 | `bot-cpp/` | The Telegram bot: C++20 sources, headers, self-tests, `build.sh` |
+| `fishing-bot/` | Native grammY Lake Ontario fishing bot, assets, domain tests |
 | `chess-objc/` | The in-house Objective-C chess engine (UCI) the bot plays against |
 | `decision-engine/` | JVM Decision Engine (Java middleware + Rust atomic logic) |
 | `wagering-service/` | Standalone C wallet service (encrypted event logs, sponsorship) |
 | `mmo-server/` | Persistent browser MMO (Java service + Three.js client) |
-| `tests/` | Python integration tests for the C wagering service and the MMO (the C++20 bot's own suite lives in `bot-cpp/tests`, 794 checks) |
+| `tests/` | Python integration tests for the C wagering service and the MMO (the C++20 bot's own suite lives in `bot-cpp/tests`) |
 | `data/` | Runtime state: casino event log, chess games file, MMO world DB |
 
 ## Building
@@ -75,7 +81,7 @@ C++20-capable compiler (g++ 12 or newer) and `curl` at runtime. There is no
 ```bash
 cd bot-cpp
 ./build.sh            # produces build/boombot and build/boombot-tests
-./build/boombot-tests # self-tests: 794 checks, 0 failures
+./build/boombot-tests # self-tests: 0 failures
 ```
 
 Chess needs the engine binary; build it once (a C compiler with Objective-C
@@ -118,6 +124,32 @@ implemented in `bot-cpp/src/` (`bb_*.cpp`).
 
     Optional: on Windows the token is read from `TELEGRAM_TOKEN_DEV` instead
     (matching the previous Python behaviour).
+
+## Native Telegram Fishing bot (grammY)
+
+The fishing game lives in `fishing-bot/` and uses grammY with a durable JSON
+store. It provides `/fish`, `/gear`, and `/collection`, with all equipment
+selection, purchases, casting, repairs, and sales handled by inline buttons.
+The first biome is Lake Ontario; the fish catalog stores realistic species,
+weight ranges, tiers, odds, and Wikipedia page names so caught fish can be
+rendered from their encyclopedia image.
+
+The existing production bot in this checkout is a C++ long-poller. Telegram
+does not allow two polling processes to share one token, so the optional
+fishing process uses a separate `FISHING_BOT_TOKEN` (create a second bot with
+BotFather) while preserving the existing bot token:
+
+```bash
+cd fishing-bot
+npm ci
+FISHING_BOT_TOKEN=YOUR_FISHING_TOKEN npm start
+```
+
+In the Docker/Fly image, setting `FISHING_BOT_TOKEN` starts it alongside the
+existing bot and persists angler state in `${BOT_DATA_DIR}/fishing.json`.
+Fishing gold is currently its own game economy, separate from the C++ casino
+wallet.
+Do not point both long-pollers at the same Telegram token.
 
 ## LLM Configuration (`/whowouldwin`, `/friggedthedeposit`)
 
@@ -365,7 +397,7 @@ scaling out would require an external database or a replication layer.
 
 The container installs the full toolchain (C++20 `g++`, Objective-C `gobjc`
 with `libobjc`, JDK, Rust, Node) at image build time, compiles `bot-cpp`
-(running its 794 self-tests), the Objective-C chess engine (`chess-objc/`), the
+(running its full self-test suite), the Objective-C chess engine (`chess-objc/`), the
 JVM decision engine, and the MMO jar, and then `start.sh` launches the C++20
 bot and the MMO service together; both write their state to the persistent
 `/data` volume (`BOT_DATA_DIR`, `CHESS_GAMES_FILE`).

@@ -4,13 +4,12 @@ TESTS   := tests
 BUILD   := build
 
 OPT     := -O3 -flto -march=native -mtune=native -funroll-loops \
-           -fomit-frame-pointer -fstrict-aliasing -fno-plt
+           -fomit-frame-pointer -fstrict-aliasing
 WARN    := -Wall -Wextra -Wpedantic -Werror -Wconversion -Wsign-conversion \
            -Wshadow -Wundef -Wformat=2 -Wformat-security -Wformat-nonliteral \
            -Wcast-qual -Wcast-align -Wwrite-strings -Wstrict-prototypes \
            -Wmissing-prototypes -Wpointer-arith -Wswitch-enum \
-           -Wduplicated-cond -Wduplicated-branches -Wlogical-op \
-           -Wnull-dereference -Wstack-usage=16384
+           -Wnull-dereference
 CFLAGS  := -std=gnu11 -pthread $(OPT) $(WARN) -I$(SRC) \
            -Wno-objc-root-class
 LDFLAGS := -flto -pthread

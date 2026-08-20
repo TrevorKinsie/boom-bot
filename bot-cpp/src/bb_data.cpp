@@ -3,9 +3,12 @@
 #include "bb_config.h"
 #include "bb_log.h"
 
-#include <cstdio>
+#include <atomic>
+#include <fcntl.h>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <unistd.h>
 
 namespace bb {
 
@@ -21,11 +24,51 @@ std::string read_file_or_empty(const std::string& path) {
 }
 
 bool write_file(const std::string& path, const std::string& content) {
-    std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+    static std::atomic<uint64_t> counter{0};
+    std::filesystem::path destination(path);
+    std::error_code directory_error;
+    if (destination.has_parent_path())
+        std::filesystem::create_directories(destination.parent_path(), directory_error);
+    if (directory_error)
+        return false;
+
+    std::string temporary = path + ".tmp." + std::to_string(static_cast<long long>(getpid())) +
+                            "." + std::to_string(counter.fetch_add(1));
+    std::ofstream stream(temporary, std::ios::binary | std::ios::trunc);
     if (!stream)
         return false;
     stream << content;
-    return static_cast<bool>(stream);
+    stream.flush();
+    if (!stream) {
+        stream.close();
+        std::error_code remove_error;
+        std::filesystem::remove(temporary, remove_error);
+        return false;
+    }
+    stream.close();
+    if (!stream) {
+        std::error_code remove_error;
+        std::filesystem::remove(temporary, remove_error);
+        return false;
+    }
+
+    int fd = open(temporary.c_str(), O_RDONLY);
+    if (fd < 0 || fsync(fd) != 0) {
+        if (fd >= 0)
+            close(fd);
+        std::error_code remove_error;
+        std::filesystem::remove(temporary, remove_error);
+        return false;
+    }
+    close(fd);
+    std::error_code rename_error;
+    std::filesystem::rename(temporary, path, rename_error);
+    if (rename_error) {
+        std::error_code remove_error;
+        std::filesystem::remove(temporary, remove_error);
+        return false;
+    }
+    return true;
 }
 } // namespace
 

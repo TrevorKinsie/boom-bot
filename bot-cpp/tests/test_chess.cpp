@@ -77,6 +77,36 @@ TEST_CASE(chess_store_round_trip) {
     }
 }
 
+TEST_CASE(chess_store_repairs_malformed_records) {
+    std::filesystem::remove_all(kTempDir);
+    std::filesystem::create_directories(kTempDir);
+    std::string file = std::string(kTempDir) + "/malformed.json";
+
+    {
+        std::ofstream output(file);
+        output << R"([1, 2, 3])";
+    }
+    chess::GameStore store(file);
+    store.load();
+    CHECK(!store.find_any(12));
+
+    {
+        std::ofstream output(file);
+        output << R"({"12":{"fen":"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -","status":7,"winner":false,"community_color":"x","difficulty":999,"moves":[4,"e4"],"uci_moves":["e2e4","bad"]}})";
+    }
+    store.load();
+    auto found = store.find_any(12);
+    CHECK(found.has_value());
+    if (found.has_value()) {
+        CHECK(found->status == "active");
+        CHECK(found->winner.empty());
+        CHECK(found->community_color == "w");
+        CHECK(found->difficulty == 20);
+        CHECK(found->moves.size() == 1 && found->moves[0] == "e4");
+        CHECK(found->uci_moves.empty());
+    }
+}
+
 // --- UciClient against the real engine ------------------------------------
 
 TEST_CASE(chess_uci_client_engine) {
@@ -113,6 +143,9 @@ TEST_CASE(chess_uci_client_engine) {
     // Full move cycle through the engine's own board: user move, then engine
     // reply, then re-read the position.
     engine.start_fen();
+    auto startpos_uci = engine.san_to_uci("startpos", "e4");
+    CHECK(startpos_uci.ok);
+    CHECK_STR_EQ(startpos_uci.value, "e2e4");
     CHECK(engine.play("e2e4"));
     auto after_user = engine.fen_of();
     CHECK(after_user.ok);
@@ -182,8 +215,15 @@ TEST_CASE(chess_service_game) {
     // Starting a new game after a completed one.
     std::string again = service.start(chat, "TestUser", 2);
     CHECK(again.find("New chess game started!") != std::string::npos);
-    CHECK(store.find_active(chat).has_value());
-    CHECK(store.find_active(chat)->moves.empty());
+    auto restarted = store.find_active(chat);
+    CHECK(restarted.has_value());
+    if (restarted.has_value()) {
+        CHECK(restarted->moves.empty() || restarted->moves.size() == 1);
+        if (restarted->community_color == "w")
+            CHECK(restarted->moves.empty());
+        else
+            CHECK(restarted->moves.size() == 1);
+    }
 
     // board() with no game.
     std::string nobody = service.board(9999);

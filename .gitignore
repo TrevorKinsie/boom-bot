@@ -54,5 +54,9 @@ mmo-server/node_modules/
 # Vendored three.js r128 global build must ship in the jar (see build.sh).
 !mmo-server/src/main/resources/static/lib/
 
+# Native grammY fishing bot dependencies and runtime data.
+fishing-bot/node_modules/
+fishing-bot/data/
+
 # Local git worktrees (e.g. .worktrees/enterprise-class-diagram)
 .worktrees/

@@ -10,10 +10,13 @@
  * (chess / newgame / move / resign / draw / board) runs against the in-house
  * engine through ChessService.
  */
+#include <algorithm>
 #include <csignal>
+#include <chrono>
 #include <filesystem>
 #include <iostream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "bb_casino.h"
@@ -237,6 +240,7 @@ int main(int argc, char** argv) {
 
     std::signal(SIGINT, on_signal);
     std::signal(SIGTERM, on_signal);
+    std::signal(SIGPIPE, SIG_IGN);
 
     bb::DataManager dm;
     dm.reload_all();
@@ -251,9 +255,17 @@ int main(int argc, char** argv) {
     bb::log::log_info("Bot ready (username='" + bot_username_cache + "').");
 
     int64_t offset = 0;
+    int empty_poll_backoff = 0;
     while (!g_stop) {
         std::vector<bb::TelegramUpdate> updates =
             bb::telegram_get_updates(bb::cfg::TELEGRAM_TOKEN, offset, 30);
+        if (updates.empty()) {
+            int seconds = 1 << std::min(empty_poll_backoff, 2);
+            std::this_thread::sleep_for(std::chrono::seconds(seconds));
+            empty_poll_backoff = std::min(empty_poll_backoff + 1, 2);
+        } else {
+            empty_poll_backoff = 0;
+        }
         for (const bb::TelegramUpdate& update : updates) {
             if (update.has_message) {
                 try {

@@ -727,6 +727,7 @@ void bbCoreMake(BBCore *b, BBMove move, BBCoreUndo *undo)
     undo->prevCastle = prevCastle;
     undo->prevEp = b->ep;
     undo->prevHalfmove = b->halfmove;
+    undo->prevFullmove = b->fullmove;
     undo->prevKey = b->key;
     undo->prevKeyCount = b->keyCount;
 
@@ -898,10 +899,7 @@ void bbCoreUnmake(BBCore *b, const BBCoreUndo *undo)
     b->castle = undo->prevCastle;
     b->ep = undo->prevEp;
     b->halfmove = undo->prevHalfmove;
-    b->fullmove = (int32_t)(b->fullmove - (b->stm == BB_WHITE ? 1 : 0));
-    if (b->stm == BB_BLACK) {
-        b->fullmove--;
-    }
+    b->fullmove = undo->prevFullmove;
     b->key = undo->prevKey;
     b->keyCount = undo->prevKeyCount;
     {
@@ -919,6 +917,7 @@ void bbCoreMakeNull(BBCore *b, BBCoreUndo *undo)
     undo->prevCastle = b->castle;
     undo->prevEp = b->ep;
     undo->prevHalfmove = b->halfmove;
+    undo->prevFullmove = b->fullmove;
     undo->prevKey = b->key;
     undo->prevKeyCount = b->keyCount;
 
@@ -932,6 +931,7 @@ void bbCoreUnmakeNull(BBCore *b, const BBCoreUndo *undo)
     b->stm = (b->stm == BB_WHITE) ? BB_BLACK : BB_WHITE;
     b->key = undo->prevKey;
     b->halfmove = undo->prevHalfmove;
+    b->fullmove = undo->prevFullmove;
     b->keyCount = undo->prevKeyCount;
     b->ep = undo->prevEp;
     b->castle = undo->prevCastle;
@@ -1157,6 +1157,13 @@ void bbToFen(const BBCore *b, char *out, size_t outSize)
             out[pos++] = (char)('1' + bbRankOf(b->ep));
         } else {
             out[pos++] = '-';
+        }
+    }
+    if (pos + 1 < outSize) {
+        int written = snprintf(out + pos, outSize - pos, " %d %d", b->halfmove, b->fullmove);
+        if (written > 0) {
+            size_t added = (size_t)written;
+            pos += added < outSize - pos ? added : outSize - pos - 1;
         }
     }
     out[pos] = '\0';

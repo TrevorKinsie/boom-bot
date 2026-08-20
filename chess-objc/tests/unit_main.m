@@ -32,7 +32,7 @@ int main(void)
         char fen[192];
         bbCoreInit(&b, "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
         bbToFen(&b, fen, sizeof(fen));
-        expect(strcmp(fen, "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -") == 0,
+        expect(strcmp(fen, "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1") == 0,
                "FEN round trip (kiwipete)");
     }
 
@@ -58,11 +58,27 @@ int main(void)
             expect(b.key == snapshot.key && b.stm == snapshot.stm &&
                    b.castle == snapshot.castle && b.ep == snapshot.ep &&
                    b.halfmove == snapshot.halfmove &&
+                   b.fullmove == snapshot.fullmove &&
                    memcmp(b.squares, snapshot.squares, sizeof(b.squares)) == 0,
                    "make/unmake restores the position");
             k = bbGenLegal(&b, buf);
             expect(k == n, "move count is stable across make/unmake");
         }
+    }
+
+    {
+        BBCore b;
+        BBCoreUndo u;
+        BBMove move;
+        bbCoreInit(&b, "4k3/8/8/8/8/8/8/4K3 b - - 4 17");
+        expect(bbParseUciMove(&b, "e8d7", &move) == 1,
+               "black move parses with FEN counters");
+        bbCoreMake(&b, move, &u);
+        expect(b.fullmove == 18 && b.halfmove == 5,
+               "black move advances FEN counters");
+        bbCoreUnmake(&b, &u);
+        expect(b.fullmove == 17 && b.halfmove == 4,
+               "black move restores FEN counters");
     }
 
     /* --- en passant + double push ---------------------------------- */
