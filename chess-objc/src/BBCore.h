@@ -20,6 +20,7 @@ extern "C" {
 typedef struct BBCoreUndo {
     uint64_t prevKey;
     int32_t  prevHalfmove;
+    int32_t  prevFullmove;
     int32_t  prevKeyCount;
     int      prevCastle;
     BBMove   move;

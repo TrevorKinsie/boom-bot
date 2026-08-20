@@ -33,6 +33,7 @@ struct Game {
     int difficulty = 20;           // 0..20
     std::string starter;           // Telegram display name
     std::vector<std::string> moves; // SAN of every played move
+    std::vector<std::string> uci_moves; // UCI history for repetition detection
 };
 
 // Persistent JSON-backed store of chess games (one file, mirrors cfg).
@@ -41,11 +42,11 @@ public:
     explicit GameStore(const std::string& file);
 
     void load();
-    void save();
+    bool save();
 
     std::optional<Game> find_active(int64_t chat_id) const;
     std::optional<Game> find_any(int64_t chat_id) const;
-    void upsert(const Game& game);
+    bool upsert(const Game& game);
 
 private:
     void apply(const Json& doc, Game& game) const;
@@ -76,9 +77,12 @@ public:
     void ensure_started();
 
     // Round-trip a position. Each op re-sets the engine board first.
-    Result san_to_uci(const std::string& fen, const std::string& san);
-    Result uci_to_san(const std::string& fen, const std::string& uci);
-    Result status_of(const std::string& fen);
+    Result san_to_uci(const std::string& fen, const std::string& san,
+                      const std::vector<std::string>& history = {});
+    Result uci_to_san(const std::string& fen, const std::string& uci,
+                      const std::vector<std::string>& history = {});
+    Result status_of(const std::string& fen,
+                     const std::vector<std::string>& history = {});
     Result fen_of();                       // current engine board as a fen
     Result best_move(int depth);           // current engine board, depth >= 1
     Result start_fen();                    // reset the board to the start

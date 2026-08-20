@@ -36,9 +36,15 @@ COPY . .
 # Compile the Objective-C chess engine (builds build/chess-objc).
 RUN make -C chess-objc all
 
-# Compile the C++20 Telegram bot and run its self-tests (794 checks). The
+# Compile the C++20 Telegram bot and run its self-tests. The
 # tests spawn the chess engine, so the engine must exist first in the image.
 RUN ./bot-cpp/build.sh && ./bot-cpp/build/boombot-tests > /tmp/boombot-tests.log && tail -1 /tmp/boombot-tests.log
+
+# Compile the optional grammY Lake Ontario fishing bot. It is started only
+# when FISHING_BOT_TOKEN is configured, because Telegram cannot have two
+# long-pollers sharing one token.
+RUN npm ci --prefix fishing-bot --no-audit --no-fund \
+    && npm run build --prefix fishing-bot
 
 # Compile the JVM decision engine (jar + Rust atomic_cli binary).
 # Cache mounts keep the cargo registry and the incremental target dir warm
