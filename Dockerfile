@@ -4,26 +4,28 @@
 # so dependency downloads and compile artifacts persist between deploys.
 
 # Debian's multi-architecture packages are available on both amd64 and arm64.
-# Toolchain: g++ builds the C++20 Telegram bot; openjdk-17 + rustc/cargo build
-# the JVM decision engine; node/npm/curl build the MMO game service (its HTTP
-# client is TypeScript and its build vendors the sqlite-jdbc driver over
-# HTTPS). stockfish is the retained Chess Challenge reference engine.
+# Toolchain: g++ builds the C++20 Telegram bot; gobjc + libobjc build the
+# in-house Objective-C chess engine (chess-objc/); openjdk-17 + rustc/cargo
+# build the JVM decision engine; node/npm/curl build the MMO game service (its
+# HTTP client is TypeScript and its build vendors the sqlite-jdbc driver over
+# HTTPS).
 FROM debian:bookworm-slim
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         g++ \
-        stockfish \
+        gobjc \
+        libobjc-12-dev \
+        make \
         openjdk-17-jdk-headless \
         rustc \
         cargo \
         nodejs \
         npm \
         curl \
-    && ln -s /usr/games/stockfish /usr/local/bin/stockfish \
     && rm -rf /var/lib/apt/lists/*
 
-ENV STOCKFISH_PATH=/usr/games/stockfish
+ENV CHESS_ENGINE_PATH=/app/chess-objc/build/chess-objc
 
 # Set the working directory in the container
 WORKDIR /app
@@ -31,7 +33,11 @@ WORKDIR /app
 # Copy the application source into the container at /app
 COPY . .
 
-# Compile the C++20 Telegram bot and run its self-tests (751 checks).
+# Compile the Objective-C chess engine (builds build/chess-objc).
+RUN make -C chess-objc all
+
+# Compile the C++20 Telegram bot and run its self-tests (794 checks). The
+# tests spawn the chess engine, so the engine must exist first in the image.
 RUN ./bot-cpp/build.sh && ./bot-cpp/build/boombot-tests > /tmp/boombot-tests.log && tail -1 /tmp/boombot-tests.log
 
 # Compile the JVM decision engine (jar + Rust atomic_cli binary).

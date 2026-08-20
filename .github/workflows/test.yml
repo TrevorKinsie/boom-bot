@@ -28,13 +28,19 @@ permissions:
 
 jobs:
   # The Telegram bot is a C++20 binary (bot-cpp/); its self-tests are the
-  # authoritative gate (751 checks). ubuntu-latest ships a C++20-capable g++.
+  # authoritative gate (794 checks). They spawn the Objective-C chess engine
+  # (chess-objc/), so that must be built first. ubuntu-latest ships a
+  # C++20-capable g++ and the gobjc Objective-C toolchain.
   cpp:
     name: C++20 bot (build + tests)
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
+      - name: Install Objective-C toolchain
+        run: sudo apt-get update && sudo apt-get install -y gobjc libobjc-13-dev
+      - name: Build the in-house chess engine
+        run: make -C chess-objc all
       - name: Build and run C++20 bot tests
         run: |
           cd bot-cpp
@@ -108,13 +114,14 @@ jobs:
         run: flyctl deploy --build-only --remote-only
 
   # Aggregate gate. The repository ruleset ("Pass CI in PR") requires a status
-  # check named `test` (the historical single-job id). Because we now run the
+  # check named `Run Tests` (the historical single-job name). Because we now run the
   # suite as parallel jobs, we re-emit a job with id `test` that only passes
   # when every job above it passed. This keeps the required check satisfied
   # without needing admin to rewrite the ruleset, and it stays green no matter
-  # how the underlying jobs get renamed later. Note: the job id (not `name`)
-  # determines the check context, so leave it as `test`.
+  # how the underlying jobs get renamed later. Keep the job id as `test` while
+  # restoring the historical check name required by the repository ruleset.
   test:
+    name: Run Tests
     runs-on: ubuntu-latest
     needs: [cpp, wagering, integration, deployability]
     if: always()

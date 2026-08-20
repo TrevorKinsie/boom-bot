@@ -16,22 +16,16 @@ primary_region = "iad" # Choose a region close to you or your users
 # These defaults fit a single shared-cpu-1x Machine with 512 MB of RAM.
 [env]
   BOT_DATA_DIR = "/data"
-  CHESS_DATABASE_PATH = "/data/chess.sqlite3"
-  STOCKFISH_PATH = "/usr/games/stockfish"
-  STOCKFISH_HASH_MB = "64"
-  STOCKFISH_THREADS = "1"
-  STOCKFISH_DEPTH = "12"
-  STOCKFISH_GAME_DEPTH = "12"
-  STOCKFISH_ANALYSIS_DEPTH = "12"
-  CHESS_ANALYSIS_INTERVAL = "15"
+  CHESS_ENGINE_PATH = "/app/chess-objc/build/chess-objc"
+  CHESS_GAMES_FILE = "/data/chess_games.json"
   # MMO game service (HTTP website) configuration.
   MMO_BIND = "0.0.0.0"
   MMO_PORT = "8080"
   MMO_GAME_DB = "/data/mmo.sqlite3"
   MMO_WALLET_DB = "/data/casino.sqlite3"
 
-# The MMO game service is an always-on JVM alongside the bot, Stockfish, and
-# the (lazy) decision-engine JVMs, so give the single Machine more memory.
+# The MMO game service is an always-on JVM alongside the bot and the
+# decision-engine JVMs, so give the single Machine more memory.
 [[vm]]
   size = "shared-cpu-1x"
   memory = "1024mb"
@@ -54,5 +48,3 @@ primary_region = "iad" # Choose a region close to you or your users
 
 # Define the command to run your application
 # This is usually handled by the Dockerfile's CMD, but can be overridden here if needed.
-# [processes]
-#   app = "python bot.py"

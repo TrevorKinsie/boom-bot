@@ -45,6 +45,11 @@ extern std::string DECISION_ENGINE_RUST_BIN;
 extern std::string DECISION_ENGINE_MODE;        // auto | jvm | reference
 extern double DECISION_ENGINE_TIMEOUT_SECONDS;
 
+// Community chess configuration (in-house engine, no Stockfish).
+extern std::string CHESS_ENGINE_PATH;           // UCI engine binary
+extern int64_t CHESS_ENGINE_DEPTH;              // max search depth (difficulty 20)
+extern std::string CHESS_GAMES_FILE;            // JSON persistence
+
 // Reads the environment (idempotent; call once at startup).
 void load_config();
 
