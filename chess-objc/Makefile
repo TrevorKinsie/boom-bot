@@ -13,7 +13,8 @@ WARN    := -Wall -Wextra -Wpedantic -Werror -Wconversion -Wsign-conversion \
            -Wnull-dereference -Wstack-usage=16384
 CFLAGS  := -std=gnu11 -pthread $(OPT) $(WARN) -I$(SRC) \
            -Wno-objc-root-class
-LDFLAGS := -flto -pthread -lobjc
+LDFLAGS := -flto -pthread
+LDLIBS  := -lobjc
 
 ENGINE := $(BUILD)/BBRootObject.o $(BUILD)/BBCore.o $(BUILD)/BBEval.o \
           $(BUILD)/BBSearch.o $(BUILD)/BBUCI.o
@@ -32,13 +33,13 @@ $(BUILD)/%.o: $(TESTS)/%.m | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD)/chess-objc: $(ENGINE) $(BUILD)/main.o
-	$(CC) $(LDFLAGS) $^ -o $@
+	$(CC) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 
 $(BUILD)/perft: $(ENGINE) $(BUILD)/perft_main.o
-	$(CC) $(LDFLAGS) $^ -o $@
+	$(CC) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 
 $(BUILD)/unit: $(ENGINE) $(BUILD)/unit_main.o
-	$(CC) $(LDFLAGS) $^ -o $@
+	$(CC) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 
 perft: $(BUILD)/perft
 	$(BUILD)/perft
