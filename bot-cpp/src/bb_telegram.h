@@ -83,6 +83,10 @@ bool telegram_answer_callback_query(const std::string& token,
 // Returns the bot's own username (no '@'), or empty on failure.
 std::string telegram_bot_username(const std::string& token);
 
+// Remove any active webhook so getUpdates long polling is permitted again
+// (Telegram rejects getUpdates with HTTP 409 while a webhook is set).
+bool telegram_delete_webhook(const std::string& token);
+
 // Long-poll getUpdates. Returns updates with update_id > offset, and sets
 // `next_offset` to the id to pass next time.
 std::vector<TelegramUpdate> telegram_get_updates(const std::string& token,

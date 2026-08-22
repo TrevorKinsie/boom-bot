@@ -254,6 +254,15 @@ int main(int argc, char** argv) {
     bot_username_cache = bb::telegram_bot_username(bb::cfg::TELEGRAM_TOKEN);
     bb::log::log_info("Bot ready (username='" + bot_username_cache + "').");
 
+    // A webhook left on the token (from any experiment or other framework)
+    // makes Telegram reject every getUpdates with HTTP 409, which would leave
+    // the poller running but mute forever. Clear it before polling.
+    if (bb::telegram_delete_webhook(bb::cfg::TELEGRAM_TOKEN))
+        bb::log::log_info("Webhook cleared; long polling active.");
+    else
+        bb::log::log_warning(
+            "Could not clear webhook; getUpdates may be rejected (HTTP 409).");
+
     int64_t offset = 0;
     int empty_poll_backoff = 0;
     while (!g_stop) {
