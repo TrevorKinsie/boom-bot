@@ -4,6 +4,7 @@
 
 #include "bb_http.h"
 #include "bb_json.h"
+#include "bb_log.h"
 
 namespace bb {
 
@@ -13,6 +14,27 @@ const char* API_BASE = "https://api.telegram.org/bot";
 
 std::string api_url(const std::string& token, const std::string& method) {
     return std::string(API_BASE) + token + "/" + method;
+}
+
+// Human-readable failure for logs: HTTP status when present, else the curl
+// stderr text (transport errors have status 0). When Telegram returned a JSON
+// error document, prefer its "description" field.
+std::string describe_failure(const HttpResponse& resp) {
+    if (!resp.body.empty()) {
+        try {
+            Json payload = Json::parse(resp.body);
+            std::string description = payload.get_string("description");
+            if (!description.empty()) {
+                if (resp.status > 0)
+                    return "HTTP " + std::to_string(resp.status) + ": " + description;
+                return description;
+            }
+        } catch (const JsonError&) {
+        }
+    }
+    if (resp.status > 0)
+        return "HTTP " + std::to_string(resp.status);
+    return resp.error.empty() ? "transport error" : resp.error;
 }
 
 int64_t as_id(const Json& json, const char* key) {
@@ -104,8 +126,11 @@ int64_t telegram_send_message(const std::string& token, int64_t chat_id,
     HttpResponse resp = http_post(api_url(token, "sendMessage"),
                                   {"Content-Type: application/json"},
                                   body.dump(), 30.0);
-    if (!resp.ok())
+    if (!resp.ok()) {
+        log::log_warning("sendMessage to " + std::to_string(chat_id) +
+                         " failed: " + describe_failure(resp));
         return 0;
+    }
     try {
         Json payload = Json::parse(resp.body);
         const Json* result = payload.find("result");
@@ -147,8 +172,10 @@ bool telegram_answer_callback_query(const std::string& token,
 
 std::string telegram_bot_username(const std::string& token) {
     HttpResponse resp = http_get(api_url(token, "getMe"), {}, 30.0);
-    if (!resp.ok())
+    if (!resp.ok()) {
+        log::log_warning("getMe failed: " + describe_failure(resp));
         return "";
+    }
     try {
         Json payload = Json::parse(resp.body);
         const Json* result = payload.find("result");
@@ -160,6 +187,16 @@ std::string telegram_bot_username(const std::string& token) {
     }
 }
 
+bool telegram_delete_webhook(const std::string& token) {
+    HttpResponse resp = http_post(api_url(token, "deleteWebhook"),
+                                  {"Content-Type: application/json"}, "{}", 30.0);
+    if (!resp.ok()) {
+        log::log_warning("deleteWebhook failed: " + describe_failure(resp));
+        return false;
+    }
+    return true;
+}
+
 std::vector<TelegramUpdate> telegram_get_updates(const std::string& token,
                                                  int64_t offset,
                                                  int timeout_seconds) {
@@ -169,8 +206,10 @@ std::vector<TelegramUpdate> telegram_get_updates(const std::string& token,
                   api_url(token, "getUpdates").c_str(),
                   static_cast<long long>(offset), timeout_seconds);
     HttpResponse resp = http_get(url, {}, static_cast<double>(timeout_seconds) + 15.0);
-    if (!resp.ok())
+    if (!resp.ok()) {
+        log::log_warning("getUpdates failed: " + describe_failure(resp));
         return out;
+    }
     try {
         Json payload = Json::parse(resp.body);
         const Json* result = payload.find("result");
