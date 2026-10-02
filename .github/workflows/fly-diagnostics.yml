@@ -38,6 +38,14 @@ jobs:
         continue-on-error: true
         run: flyctl status --app boom-bot
 
+      - name: Inspect existing Machine events
+        continue-on-error: true
+        run: flyctl machine status 91853060a12d08 --app boom-bot
+
+      - name: Inspect public IP allocation
+        continue-on-error: true
+        run: flyctl ips list --app boom-bot
+
       - name: Inspect boom-bot health checks
         continue-on-error: true
         run: flyctl checks list --app boom-bot
