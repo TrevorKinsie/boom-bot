@@ -1,0 +1,47 @@
+name: Fly Diagnostics
+
+# Run on an isolated diagnostic branch, without triggering the main deploy.
+on:
+  push:
+    branches: ["codex/fly-diagnostics"]
+    paths: [".github/workflows/fly-diagnostics.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    name: Inspect existing Fly deployment access
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      FLY_NO_UPDATE_CHECK: "1"
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@v1
+        with:
+          version: "0.4.111"
+
+      - name: Identify deployment credential
+        continue-on-error: true
+        run: flyctl auth whoami
+
+      - name: List accessible organizations
+        continue-on-error: true
+        run: flyctl orgs list
+
+      - name: List accessible apps and their owners
+        continue-on-error: true
+        run: flyctl apps list
+
+      - name: Inspect boom-bot status
+        continue-on-error: true
+        run: flyctl status --app boom-bot
+
+      - name: Inspect boom-bot health checks
+        continue-on-error: true
+        run: flyctl checks list --app boom-bot
+
+      - name: Inspect boom-bot volumes
+        continue-on-error: true
+        run: flyctl volumes list --app boom-bot
