@@ -1,1 +1,7 @@
+python-telegram-bot
+python-dotenv
+nltk
+inflect
 pytest
+pytest-asyncio
+requests
