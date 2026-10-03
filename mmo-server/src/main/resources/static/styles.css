@@ -1,0 +1,57 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; font-family: "Segoe UI", system-ui, sans-serif;
+  background: #0d1420; color: #e8eef7; }
+#scene { position: fixed; inset: 0; }
+canvas { display: block; }
+
+#overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at center, #16233b 0%, #0a0f1a 70%); z-index: 20; }
+.card { background: #141d2e; border: 1px solid #2a3a55; border-radius: 14px; padding: 26px 30px;
+  max-width: 420px; box-shadow: 0 18px 60px rgba(0,0,0,.55); }
+.card h1 { margin: 0 0 2px; font-size: 30px; }
+.card h1 span { color: #ffcf5c; }
+.sub { margin: 0 0 18px; color: #9fb2cf; font-size: 13px; }
+#join-form { display: flex; gap: 8px; }
+#name-input { flex: 1; padding: 10px 12px; border-radius: 8px; border: 1px solid #2f4260;
+  background: #0e1626; color: #eef; font-size: 15px; }
+button { cursor: pointer; border: 0; border-radius: 8px; font-weight: 600; }
+#join-btn { padding: 10px 16px; background: #ffcf5c; color: #1a1305; font-size: 15px; }
+#join-btn:hover { background: #ffe08a; }
+.dim { color: #8ea1bf; font-size: 12px; }
+.err { color: #ff8f8f; font-size: 13px; }
+.hint { margin-top: 18px; border-top: 1px solid #273650; padding-top: 12px; font-size: 13px; }
+.hint ul { margin: 8px 0 0; padding-left: 18px; color: #b9c8e2; }
+
+#hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+#hud * { pointer-events: auto; }
+#topbar { position: absolute; top: 0; left: 0; right: 0; display: flex; justify-content: space-between;
+  padding: 8px 10px; z-index: 2; }
+#player-card { display: flex; gap: 6px; flex-wrap: wrap; }
+.badge { background: rgba(13,19,31,.82); border: 1px solid #2b3d5c; border-radius: 8px;
+  padding: 5px 9px; font-size: 12px; }
+.money b { color: #ffcf5c; }
+#players-bar { background: rgba(13,19,31,.82); border: 1px solid #2b3d5c; border-radius: 8px;
+  padding: 6px 10px; font-size: 13px; }
+
+#log { position: absolute; left: 10px; bottom: 12px; width: 320px; max-height: 200px; overflow: hidden;
+  display: flex; flex-direction: column-reverse; font-size: 12px; z-index: 2; }
+#log .ln { background: rgba(13,19,31,.75); border-left: 2px solid #4a7bff; border-radius: 4px;
+  padding: 3px 8px; margin-top: 4px; color: #d8e4f7; }
+
+#side { position: absolute; right: 10px; top: 58px; width: 240px; display: flex; flex-direction: column;
+  gap: 10px; z-index: 2; }
+.panel { background: rgba(13,19,31,.88); border: 1px solid #2b3d5c; border-radius: 12px; padding: 10px 12px; }
+.panel h3 { margin: 0 0 8px; font-size: 13px; letter-spacing: .5px; color: #ffcf5c; }
+.panel ul { list-style: none; margin: 0; padding: 0; }
+.panel li { display: flex; justify-content: space-between; align-items: center; padding: 4px 0;
+  border-bottom: 1px solid #1e2c43; font-size: 13px; }
+.panel li .btns { display: flex; gap: 5px; }
+.panel li button { font-size: 11px; padding: 3px 7px; background: #263a5a; color: #dfe9fb; }
+.panel li button.sell { background: #b56; color: #fff; }
+.panel li button.dep { background: #2f6b4f; color: #fff; }
+.panel li button.with { background: #44608d; color: #fff; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+button.mini { font-size: 11px; padding: 4px 8px; background: #2f6b4f; color: #fff; }
+#skills-list div { display: flex; justify-content: space-between; padding: 3px 0; font-size: 13px; }
+#skills-list .bar { height: 6px; background: #1b2940; border-radius: 3px; margin-top: 3px; overflow:hidden; }
+#skills-list .bar > div { height: 100%; background: #ffcf5c; }

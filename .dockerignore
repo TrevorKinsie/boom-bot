@@ -7,6 +7,17 @@
 .dockerignore
 Dockerfile*
 
+# Runtime/data (recreated from /app on Fly's volume)
+data/
+logs/
+.worktrees/
+
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+
 # Python bytecode
 __pycache__/
 *.pyc
@@ -25,6 +36,10 @@ build/
 dist/
 *.egg-info/
 *.egg
+node_modules/
+
+# MMO game service build outputs (rebuilt inside the image)
+mmo-server/build/
 
 # Test artifacts
 .pytest_cache/

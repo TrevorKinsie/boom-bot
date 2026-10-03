@@ -9,18 +9,42 @@ primary_region = "iad" # Choose a region close to you or your users
 
 # Mount the persistent volume
 [mounts]
-  source="bot_data"
-  destination="/data"
+  source = "bot_data"
+  destination = "/data"
 
-# Optional: Define internal port if needed for health checks
-# [http_service]
-#   internal_port = 8080
-#   force_https = true
-#   auto_stop_machines = true
-#   auto_start_machines = true
-#   min_machines_running = 0 # Set to 1 if you want it always running
+# Keep the SQLite database and the existing bot's JSON state on the volume.
+# These defaults fit a single shared-cpu-1x Machine with 512 MB of RAM.
+[env]
+  BOT_DATA_DIR = "/data"
+  CHESS_ENGINE_PATH = "/app/chess-objc/build/chess-objc"
+  CHESS_GAMES_FILE = "/data/chess_games.json"
+  # MMO game service (HTTP website) configuration.
+  MMO_BIND = "0.0.0.0"
+  MMO_PORT = "8080"
+  MMO_GAME_DB = "/data/mmo.sqlite3"
+  MMO_WALLET_DB = "/data/casino.sqlite3"
+
+# The MMO game service is an always-on JVM alongside the bot and the
+# decision-engine JVMs, so give the single Machine more memory.
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1024mb"
+  processes = ["app"]
+
+# Serve the MMO browser client as a website. The Telegram bot itself uses
+# long polling and needs no public HTTP port.
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/api/world"
 
 # Define the command to run your application
 # This is usually handled by the Dockerfile's CMD, but can be overridden here if needed.
-# [processes]
-#   app = "python bot.py"

@@ -1,0 +1,16 @@
+{
+  "name": "boom-bot-mmo-client",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Browser client for the boom-bot MMO (compiled to plain JS for the jar)",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "format": "prettier --write \"src/main/resources/static/*.ts\"",
+    "format:check": "prettier --check \"src/main/resources/static/*.ts\""
+  },
+  "devDependencies": {
+    "prettier": "^3.3.0",
+    "typescript": "^5.5.0"
+  }
+}

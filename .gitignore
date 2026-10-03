@@ -4,6 +4,7 @@ question_answers.json
 game_data.json
 logs/error.log
 *.egg-info/
+data/
 
 # Virtual environment
 venv/
@@ -18,6 +19,10 @@ dist/
 build/
 *.py[cod]
 *$py.class
+
+# Rust (decision-engine atomic logic)
+target/
+Cargo.lock
 
 # Unit test / coverage reports
 .coverage
@@ -41,3 +46,17 @@ terraform/secrets/terraform.tfvars
 lib64
 pyvenv.cfg
 .envcopy
+
+# MMO game service build artifacts + local game database writes
+mmo-server/build/
+mmo-server/*.log
+mmo-server/node_modules/
+# Vendored three.js r128 global build must ship in the jar (see build.sh).
+!mmo-server/src/main/resources/static/lib/
+
+# Native grammY fishing bot dependencies and runtime data.
+fishing-bot/node_modules/
+fishing-bot/data/
+
+# Local git worktrees (e.g. .worktrees/enterprise-class-diagram)
+.worktrees/

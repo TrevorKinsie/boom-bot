@@ -1,23 +1,65 @@
-# Use an official Python runtime as a parent image
-FROM python:3.13.3-alpine
+# syntax=docker/dockerfile:1.7
+# BuildKit enables the RUN --mount=type=cache lines below. Fly's remote
+# builder honours it (and our deployability check builds with --remote-only),
+# so dependency downloads and compile artifacts persist between deploys.
+
+# Debian's multi-architecture packages are available on both amd64 and arm64.
+# Toolchain: g++ builds the C++20 Telegram bot; gobjc + libobjc build the
+# in-house Objective-C chess engine (chess-objc/); openjdk-17 + rustc/cargo
+# build the JVM decision engine; node/npm/curl build the MMO game service (its
+# HTTP client is TypeScript and its build vendors the sqlite-jdbc driver over
+# HTTPS).
+FROM debian:bookworm-slim
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        g++ \
+        gobjc \
+        libobjc-12-dev \
+        make \
+        openjdk-17-jdk-headless \
+        rustc \
+        cargo \
+        nodejs \
+        npm \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV CHESS_ENGINE_PATH=/app/chess-objc/build/chess-objc
 
 # Set the working directory in the container
 WORKDIR /app
 
-# Copy the requirements file into the container at /app
-COPY requirements.txt .
-
-# Install any needed packages specified in requirements.txt
-# Use --no-cache-dir to reduce image size
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Download NLTK data
-RUN python -m nltk.downloader punkt wordnet averaged_perceptron_tagger stopwords
-
-# Copy the rest of the application code into the container at /app
+# Copy the application source into the container at /app
 COPY . .
 
-# Install the package in development mode
-RUN pip install -e .
+# Compile the Objective-C chess engine (builds build/chess-objc).
+RUN make -C chess-objc all
 
-CMD ["python", "main.py"]
+# Compile the C++20 Telegram bot and run its self-tests. The
+# tests spawn the chess engine, so the engine must exist first in the image.
+RUN ./bot-cpp/build.sh && ./bot-cpp/build/boombot-tests > /tmp/boombot-tests.log && tail -1 /tmp/boombot-tests.log
+
+# Compile the optional grammY Lake Ontario fishing bot. It is started only
+# when FISHING_BOT_TOKEN is configured, because Telegram cannot have two
+# long-pollers sharing one token.
+RUN npm ci --prefix fishing-bot --no-audit --no-fund \
+    && npm run build --prefix fishing-bot
+
+# Compile the JVM decision engine (jar + Rust atomic_cli binary).
+# Cache mounts keep the cargo registry and the incremental target dir warm
+# across deploys; the crate is dependency-free, so this is near-instant anyway.
+RUN --mount=type=cache,target=/root/.cargo \
+    --mount=type=cache,target=/app/decision-engine/rust-atomic-logic/target \
+    ./decision-engine/build.sh
+
+# Compile the MMO game service (jar + browser client + vendored sqlite-jdbc).
+# Cache mounts persist the vendored 13 MB sqlite-jdbc jar and the compiled TS
+# client; build.sh still recompiles all Java sources and re-packages the jar,
+# but skips re-downloading the driver and re-running tsc.
+RUN --mount=type=cache,target=/root/.npm \
+    --mount=type=cache,target=/app/mmo-server/build \
+    ./mmo-server/build.sh
+
+# Run the Telegram bot and the MMO game service (HTTP website) together.
+CMD ["bash", "start.sh"]
